@@ -5,7 +5,7 @@ a = Analysis(
     ['D:/Desktop/SD/13.Rename/src/rename_master/main.py'],
     pathex=['D:/Desktop/SD/13.Rename/src'],
     binaries=[],
-    datas=[],
+    datas=[('D:/Desktop/SD/13.Rename/assets', 'assets')],
     hiddenimports=['PIL', 'openpyxl', 'docx', 'pypdf'],
     hookspath=[],
     hooksconfig={},

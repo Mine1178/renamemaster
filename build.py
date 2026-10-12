@@ -53,6 +53,9 @@ def _build_cmd() -> list[str]:
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
+    assets = ROOT / "assets"
+    if assets.is_dir():
+        cmd += ["--add-data", f"{assets};assets"]
     return cmd
 
 
