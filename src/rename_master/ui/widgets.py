@@ -23,19 +23,21 @@ class Card(tk.Frame):
         tk.Frame(self, bg=accent, height=4).pack(fill=tk.X)
         self._title = tk.Label(self, text=title, font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
                                bg=T.C_CARD, fg=T.C_TEXT, anchor="w", justify=tk.LEFT)
-        self._title.pack(fill=tk.X, padx=T.S_MD, pady=(T.S_MD, T.S_XS))
+        self._title.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(T.S_MD, T.S_XS))
         self._desc = None
         if desc:
             self._desc = tk.Label(self, text=desc, font=(T.FONT_FAMILY, T.F_BODY),
                                   bg=T.C_CARD, fg=T.C_TEXT_SUB, justify=tk.LEFT,
                                   anchor="w", wraplength=200)
-            self._desc.pack(fill=tk.X, padx=T.S_MD, pady=(0, T.S_SM))
+            self._desc.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(0, T.S_SM))
         body = tk.Frame(self, bg=T.C_CARD)
-        body.pack(fill=tk.BOTH, expand=True, padx=T.S_MD, pady=(0, T.S_MD))
+        body.pack(fill=tk.BOTH, expand=True,
+                  padx=T.CARD_BODY_PAD, pady=(0, T.CARD_BODY_PAD))
         self.body = body
         if on_click:
             tk.Label(self, text="进入 →", font=(T.FONT_FAMILY, T.F_SM, "bold"),
-                     bg=T.C_CARD, fg=accent).pack(anchor="e", padx=T.S_MD, pady=(0, T.S_SM))
+                     bg=T.C_CARD, fg=accent).pack(anchor="e", padx=T.CARD_BODY_PAD,
+                                                  pady=(0, T.S_SM))
             self.bind("<Button-1>", lambda e: on_click())
             self.bind("<Enter>", lambda e: self._hover(True, accent))
             self.bind("<Leave>", lambda e: self._hover(False, accent))
@@ -46,7 +48,7 @@ class Card(tk.Frame):
     def _on_resize(self, event) -> None:
         if self._desc is None:
             return
-        wl = max(80, self.winfo_width() - 2 * T.S_MD)
+        wl = max(80, self.winfo_width() - 2 * T.CARD_BODY_PAD)
         if self._desc.cget("wraplength") != wl:
             self._desc.config(wraplength=wl)
 

@@ -134,10 +134,15 @@ def build(page: tk.Frame, app) -> None:
         _refresh_tree()
         app.set_status("已清空文件列表")
 
-    # ---------- ② 命名模式 ----------
-    card2 = Card(page, "② 命名模式", "统一前缀 + 序号，或按 Excel 对照表一一改名",
+    # ---------- ② 命名模式 / ③ 压缩：并排两列（缩短页面纵向长度） ----------
+    mid = tk.Frame(page, bg=T.C_BG)
+    mid.pack(fill=tk.X, pady=(0, T.S_MD))
+    mid.grid_columnconfigure(0, weight=1, uniform="mid")
+    mid.grid_columnconfigure(1, weight=1, uniform="mid")
+
+    card2 = Card(mid, "② 命名模式", "统一前缀 + 序号，或按 Excel 对照表一一改名",
                  accent=T.C_ACCENT)
-    card2.pack(fill=tk.X, pady=(0, T.S_MD))
+    card2.grid(row=0, column=0, sticky="nsew", padx=(0, T.S_SM))
 
     mode_row = tk.Frame(card2.body, bg=T.C_CARD)
     mode_row.pack(fill=tk.X)
@@ -146,29 +151,33 @@ def build(page: tk.Frame, app) -> None:
     _radio(mode_row, "模式二：一一对照（Excel）", st["mode"], "map",
            command=lambda: _sync_mode()).pack(side=tk.LEFT, padx=T.S_MD)
 
-    # 模式一控件
+    # 模式一控件（并排后卡片变窄：基础名称独占一行，其余横向排）
     prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
     prow = tk.Frame(prefix_box, bg=T.C_CARD)
     prow.pack(fill=tk.X, pady=(T.S_SM, 0))
     tk.Label(prow, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Entry(prow, textvariable=st["base"], width=22, relief=tk.FLAT,
+    tk.Entry(prow, textvariable=st["base"], relief=tk.FLAT,
              bg=T.C_CARD, fg=T.C_TEXT, highlightbackground=T.C_BORDER,
-             highlightthickness=1).pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    tk.Label(prow, text="序号位数", font=(T.FONT_FAMILY, T.F_BODY),
-             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.OptionMenu(prow, st["digits"], "3", "4", "5").pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    tk.Label(prow, text="起始序号", font=(T.FONT_FAMILY, T.F_BODY),
-             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Spinbox(prow, from_=0, to=99999, textvariable=st["start"],
-               width=6).pack(side=tk.LEFT, padx=(T.S_SM, 0))
+             highlightthickness=1).pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                        padx=(T.S_SM, 0))
 
     prow2 = tk.Frame(prefix_box, bg=T.C_CARD)
     prow2.pack(fill=tk.X, pady=(T.S_SM, 0))
+    tk.Label(prow2, text="位数", font=(T.FONT_FAMILY, T.F_BODY),
+             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    digits_menu = tk.OptionMenu(prow2, st["digits"], "3", "4", "5")
+    digits_menu.config(width=2)
+    digits_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
+    tk.Label(prow2, text="起始", font=(T.FONT_FAMILY, T.F_BODY),
+             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    tk.Spinbox(prow2, from_=0, to=99999, textvariable=st["start"],
+               width=4).pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
     tk.Label(prow2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     sep_menu = tk.OptionMenu(prow2, st["sep"], "_", "-", " ", "")
-    sep_menu.pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
+    sep_menu.config(width=2)
+    sep_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
     _check(prow2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
     hint_label(prefix_box, "示例：照片_001.jpg").pack(fill=tk.X, pady=(T.S_XS, 0))
 
@@ -180,15 +189,18 @@ def build(page: tk.Frame, app) -> None:
     map_label = hint_label(mrow, "尚未导入对照表")
     map_label.pack(side=tk.LEFT, padx=T.S_SM)
 
-    map_tree = styled_tree(map_box, [("src", "原文件名", 240, "w"),
-                                     ("dst", "新文件名", 240, "w")], height=6)
+    map_tree = styled_tree(map_box, [("src", "原文件名", 150, "w"),
+                                     ("dst", "新文件名", 150, "w")], height=6)
     map_vsb = ttk.Scrollbar(map_box, orient="vertical",
                             style="RenameMaster.Vertical.TScrollbar",
                             command=map_tree.yview)
     map_tree.configure(yscrollcommand=map_vsb.set)
     map_vsb.pack(side=tk.RIGHT, fill=tk.Y)
     map_tree.pack(fill=tk.X, pady=(T.S_SM, 0))
-    hint_label(map_box, "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。").pack(fill=tk.X)
+    map_hint = hint_label(map_box,
+                          "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。")
+    map_hint.config(wraplength=320)          # 并排后卡片变窄，说明需换行
+    map_hint.pack(fill=tk.X)
 
     def _import_map() -> None:
         path = filedialog.askopenfilename(title="选择对照表", filetypes=MAP_FILETYPES)
@@ -220,18 +232,28 @@ def build(page: tk.Frame, app) -> None:
             map_box.pack_forget()
 
     # ---------- ③ 压缩 ----------
-    card3 = Card(page, "③ 压缩到指定大小", "二分法调 JPEG 质量，压不到再等比缩分辨率",
+    card3 = Card(mid, "③ 压缩到指定大小", "二分法调 JPEG 质量，压不到再等比缩分辨率",
                  accent=T.C_INFO)
-    card3.pack(fill=tk.X, pady=(0, T.S_MD))
+    card3.grid(row=0, column=1, sticky="nsew", padx=(T.S_SM, 0))
 
     trow = tk.Frame(card3.body, bg=T.C_CARD)
     trow.pack(fill=tk.X)
-    for text, value in TARGET_OPTIONS:
+    for i, (text, value) in enumerate(TARGET_OPTIONS):
         _radio(trow, text, st["target"], value,
-               command=lambda: _sync_target()).pack(side=tk.LEFT, padx=(0, T.S_MD))
-    tk.Entry(trow, textvariable=st["custom_kb"], width=6).pack(side=tk.LEFT)
-    tk.Label(trow, text="KB", font=(T.FONT_FAMILY, T.F_BODY),
-             bg=T.C_CARD, fg=T.C_TEXT_M).pack(side=tk.LEFT)
+               command=lambda: _sync_target()).grid(row=i // 3, column=i % 3,
+                                                    sticky="w", padx=(0, T.S_SM))
+    for col in range(3):
+        trow.grid_columnconfigure(col, weight=1, uniform="target")
+
+    crow = tk.Frame(card3.body, bg=T.C_CARD)
+    crow.pack(fill=tk.X, pady=(T.S_SM, 0))
+    tk.Entry(crow, textvariable=st["custom_kb"], width=6,
+             relief=tk.FLAT, bg=T.C_CARD, fg=T.C_TEXT,
+             highlightbackground=T.C_BORDER,
+             highlightthickness=1).pack(side=tk.LEFT)
+    tk.Label(crow, text="KB", font=(T.FONT_FAMILY, T.F_BODY),
+             bg=T.C_CARD, fg=T.C_TEXT_M).pack(side=tk.LEFT, padx=(T.S_XS, T.S_SM))
+    hint_label(crow, "选中「自定义」时按此值压缩").pack(side=tk.LEFT)
     _check(card3.body, "保留 EXIF", st["keep_exif"]).pack(fill=tk.X, pady=(T.S_SM, 0))
 
     def _sync_target() -> None:

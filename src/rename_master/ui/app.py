@@ -45,7 +45,7 @@ class App:
         self.cur = "home"
         self.cfg = config or ConfigManager()
 
-        self.root.title(f"{APP_TITLE} v{VERSION}")
+        self.root.title(f"{APP_TITLE} · {APP_SUBTITLE}")
         sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
         # 几何值仅作兜底（state('zoomed') 失败时生效）
         self.root.geometry(f"{min(1680, int(sw * 0.92))}x{min(960, int(sh * 0.92))}")

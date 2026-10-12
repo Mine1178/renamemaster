@@ -39,6 +39,21 @@ def make_test_images(dirpath: Path, count: int = 3) -> list:
     return paths
 
 
+def smoke_doc_extract(workdir: Path) -> None:
+    """造一个临时 .txt，断言 extract_title 能取到开头文字。"""
+    from rename_master.core import doc_extract      # noqa: PLC0415
+
+    txt = workdir / "测试文档.txt"
+    txt.write_text("这是一份测试文档的开头内容，后面还有很多很多字……", encoding="utf-8")
+    title = doc_extract.extract_title(txt, 30)
+    assert "这是一份测试文档" in title, f"正文提取结果不含预期内容：{title!r}"
+    assert len(title) <= 30, f"提取结果超过 30 字：{len(title)}"
+
+    # 不支持的类型 / 不存在的文件 → 空串，不抛异常
+    assert doc_extract.extract_title(workdir / "不存在.bin") == ""
+    print(f"[6/6] doc_extract.extract_title 通过：{title!r}")
+
+
 def main() -> int:
     workdir = Path(tempfile.mkdtemp(prefix="renamemaster_smoke_"))
     try:
@@ -113,6 +128,9 @@ def main() -> int:
         assert map_plans[0].dst_name == "场景照.jpg", map_plans[0].dst_name
         print(f"[5/5] mapper.load_mapping 通过：{len(m)} 条对照 → "
               f"{[p.dst_name for p in map_plans]}")
+
+        # ---- 文档正文提取（文档页「用正文前 30 字命名」） ----
+        smoke_doc_extract(workdir)
 
         print("SMOKE OK")
         return 0
