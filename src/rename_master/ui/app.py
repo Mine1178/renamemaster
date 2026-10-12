@@ -1,4 +1,4 @@
-"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
+﻿"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
 
 任务书 §4.1 / §4.2：
 - 左导航 112 逻辑 px、底色 #1e293b，高 DPI 下按 `winfo_fpixels("1i")/72` 放大；
@@ -300,8 +300,13 @@ class App:
                            font=(T.FONT_FAMILY, _NAV_FONT_SIZE))
 
     def show(self, key: str) -> None:
+        # 切页时先把所有页面注册过的操作栏全部 hide，再 build/show 新页。
+        # bug 根因：各页面的 bar master=app.content、再 pack(in_=action_host)，
+        # action_host.winfo_children() 找不到这些 bar（master 不是 action_host），
+        # 旧 clear_action_bar 实际清不掉；导致切到 about 这种没自己 bar 的页面时，
+        # 上一页的「预览/开始执行」按钮残留（用户 2026-10-12 反馈）。
+        self._hide_all_action_bars()
         if key not in self.pages and key in self._page_builders:
-            self.clear_action_bar()
             self._page_builders[key]()
         self._nav_style(key)
         for p in self.pages.values():
@@ -314,6 +319,19 @@ class App:
         except tk.TclError:
             pass
         self._sync_canvas()
+
+    def _hide_all_action_bars(self) -> None:
+        # 把所有页面注册过的操作栏全部 pack_forget（不 destroy，保留 bar 供下次复用）。
+        bars = getattr(self, "_action_bars", None) or {}
+        for other in bars.values():
+            try:
+                other.pack_forget()
+            except tk.TclError:
+                pass
+        try:
+            self.action_host.pack_forget()
+        except tk.TclError:
+            pass
 
     def _page(self) -> tk.Frame:
         """页面根容器：统一外边距。"""
