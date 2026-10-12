@@ -33,8 +33,8 @@ def _resource_path(rel: str) -> Path:
     """PyInstaller 打包后资源在 _MEIPASS 下，开发时在项目根。"""
     if hasattr(sys, "_MEIPASS"):
         return Path(sys._MEIPASS) / rel  # type: ignore[attr-defined]
-    # 开发态：从 src/rename_master/ui/pages/ 上溯到项目根
-    return Path(__file__).resolve().parents[3] / rel
+    # 开发态：about.py 在 src/rename_master/ui/pages/，上溯 4 级到项目根
+    return Path(__file__).resolve().parents[4] / rel
 
 
 def _feature_row(master: tk.Widget, title: str, desc: str) -> None:
@@ -56,7 +56,8 @@ def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> No
     dlg.title("赞助作者")
     W, H = 860, 640
     dlg.geometry(f"{W}x{H}")
-    dlg.resizable(False, False)
+    dlg.minsize(720, 560)
+    dlg.resizable(True, True)
     dlg.transient(parent)
     dlg.grab_set()
 
