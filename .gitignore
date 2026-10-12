@@ -1,0 +1,17 @@
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+build/
+dist/
+dist_installer/
+*.spec.bak
+logs/*.log
+_inbox/*.out
+_*.log
+_*.png
+.pytest_cache/
+.idea/
+.vscode/
+*.egg-info/
