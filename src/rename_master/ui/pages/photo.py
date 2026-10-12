@@ -6,7 +6,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import compressor, mapper, renamer, scanner
+from rename_master.core import compressor, mapper, renamer, scanner, watermark
 from rename_master.ui import theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
@@ -25,6 +25,13 @@ TARGET_OPTIONS = [
     ("100 KB", "100"),
     ("自定义", "custom"),
 ]
+
+WM_PLACEHOLDER = "如：曲靖联通 2026-10-12"
+# (下拉显示文案, 传给 watermark.add_watermark 的 position)
+WM_POSITIONS = [("右下角", "bottom_right"), ("左下角", "bottom_left"),
+                ("右上角", "top_right"), ("左上角", "top_left"),
+                ("底部居中", "bottom_center")]
+WM_POS_VALUE = dict(WM_POSITIONS)
 
 FILE_COLS = [("sel", "☑", 40, tk.CENTER), ("name", "文件名", 280, "w"),
              ("size", "大小", 90, tk.CENTER), ("dim", "尺寸", 120, tk.CENTER)]
@@ -69,6 +76,9 @@ def build(page: tk.Frame, app) -> None:
         "target": tk.StringVar(value=app.cfg.get("photo.compress", "500")),
         "custom_kb": tk.StringVar(value=str(app.cfg.get("photo.custom_kb", 300))),
         "keep_exif": tk.BooleanVar(value=bool(app.cfg.get("photo.keep_exif", True))),
+        "wm_on": tk.BooleanVar(value=bool(app.cfg.get("photo.wm_on", False))),
+        "wm_text": tk.StringVar(value=str(app.cfg.get("photo.wm_text", ""))),
+        "wm_pos": tk.StringVar(value=app.cfg.get("photo.wm_pos", "右下角")),
         "out_dir": tk.StringVar(value=""),
         "cancel": None,       # threading.Event，执行中非 None
     }
@@ -259,8 +269,60 @@ def build(page: tk.Frame, app) -> None:
     def _sync_target() -> None:
         pass  # 自定义 Entry 常显，取值时再判断；保留钩子便于后续禁用态扩展
 
-    # ---------- ④ 输出位置 ----------
-    card4 = Card(page, "④ 输出位置", "默认输出到「<源目录>_重命名输出」，绝不原地覆盖",
+    # ---------- ④ 水印（可选，默认关闭） ----------
+    card_wm = Card(page, "④ 水印（可选）",
+                   "默认关闭；勾选后在压缩之后为每张照片叠加半透明白色文字",
+                   accent=T.C_WARNING)
+    card_wm.pack(fill=tk.X, pady=(0, T.S_MD))
+
+    _check(card_wm.body, "添加水印文字", st["wm_on"],
+           command=lambda: _sync_watermark()).pack(fill=tk.X)
+
+    wrow = tk.Frame(card_wm.body, bg=T.C_CARD)
+    wrow.pack(fill=tk.X, pady=(T.S_SM, 0))
+    wm_text_label = tk.Label(wrow, text="水印文字", font=(T.FONT_FAMILY, T.F_BODY),
+                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
+    wm_text_label.pack(side=tk.LEFT)
+    wm_entry = tk.Entry(wrow, textvariable=st["wm_text"], relief=tk.FLAT,
+                        bg=T.C_CARD, fg=T.C_TEXT_FADE,
+                        highlightbackground=T.C_BORDER, highlightthickness=1)
+    wm_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(T.S_SM, T.S_MD))
+    wm_pos_label = tk.Label(wrow, text="位置", font=(T.FONT_FAMILY, T.F_BODY),
+                            bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
+    wm_pos_label.pack(side=tk.LEFT)
+    wm_pos_menu = tk.OptionMenu(wrow, st["wm_pos"], *[d for d, _ in WM_POSITIONS])
+    wm_pos_menu.config(width=8)
+    wm_pos_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
+
+    def _wm_focus_in(_event=None) -> None:
+        if st["wm_text"].get() == WM_PLACEHOLDER:
+            st["wm_text"].set("")
+        wm_entry.config(fg=T.C_TEXT)
+
+    def _wm_focus_out(_event=None) -> None:
+        if not st["wm_text"].get().strip():
+            st["wm_text"].set(WM_PLACEHOLDER)
+            wm_entry.config(fg=T.C_TEXT_FADE)
+
+    wm_entry.bind("<FocusIn>", _wm_focus_in)
+    wm_entry.bind("<FocusOut>", _wm_focus_out)
+    _wm_focus_out()                                  # 初始显示 placeholder
+
+    def _wm_text_value() -> str:
+        raw = st["wm_text"].get().strip()
+        return "" if raw == WM_PLACEHOLDER else raw
+
+    def _sync_watermark() -> None:
+        on = st["wm_on"].get()
+        state = tk.NORMAL if on else tk.DISABLED
+        wm_entry.config(state=state)
+        wm_pos_menu.config(state=state)
+        fg = T.C_TEXT_M if on else T.C_TEXT_FADE
+        wm_text_label.config(fg=fg)
+        wm_pos_label.config(fg=fg)
+
+    # ---------- ⑤ 输出位置 ----------
+    card4 = Card(page, "⑤ 输出位置", "默认输出到「<源目录>_重命名输出」，绝不原地覆盖",
                  accent=T.C_SUCCESS)
     card4.pack(fill=tk.X, pady=(0, T.S_MD))
 
@@ -308,14 +370,22 @@ def build(page: tk.Frame, app) -> None:
         return renamer.plan_rename(st["files"], mode, _build_rule())
 
     def _transform(target_kb: int):
-        if target_kb <= 0:
+        # 水印是最后一步：先压缩到目标大小，再叠水印（避免水印被二次压缩糊掉）
+        wm_text = _wm_text_value() if st["wm_on"].get() else ""
+        wm_pos = WM_POS_VALUE.get(st["wm_pos"].get(), "bottom_right")
+        if target_kb <= 0 and not wm_text:
             return None
 
         def _fn(src: Path, dst_name: str):
             if Path(src).suffix.lower() not in scanner.IMAGE_EXTS:
                 return None
-            return compressor.compress_to_target(Path(src).read_bytes(), target_kb,
-                                                 keep_exif=st["keep_exif"].get())
+            data = Path(src).read_bytes()
+            if target_kb > 0:
+                data = compressor.compress_to_target(data, target_kb,
+                                                     keep_exif=st["keep_exif"].get())
+            if wm_text:
+                data = watermark.add_watermark(data, wm_text, position=wm_pos)
+            return data
         return _fn
 
     def _validate() -> bool:
@@ -476,5 +546,6 @@ def build(page: tk.Frame, app) -> None:
     page.bind("<Map>", _activate)
     _activate()
     _sync_mode()
+    _sync_watermark()
     _refresh_tree()
     app.set_status("就绪")
