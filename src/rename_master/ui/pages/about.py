@@ -47,58 +47,80 @@ def _feature_row(master: tk.Widget, title: str, desc: str) -> None:
              wraplength=520).pack(fill=tk.X, pady=(0, T.S_XS))
 
 
-def _show_sponsor_dialog(parent: tk.Misc) -> None:
-    """弹赞助窗：文案 + 支付宝/微信收款码（找不到码图显示占位）。"""
+def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> None:
+    """弹赞助窗：文案 + 支付宝/微信收款码。
+
+    anchor: 赞助按钮本身，弹窗定位在按钮附近。
+    """
     dlg = tk.Toplevel(parent)
     dlg.title("赞助作者")
-    dlg.geometry("440x420")
+    W, H = 860, 640
+    dlg.geometry(f"{W}x{H}")
     dlg.resizable(False, False)
     dlg.transient(parent)
     dlg.grab_set()
 
-    tk.Label(dlg, text="☕", font=(T.FONT_FAMILY, 28),
-             bg=T.C_BG, fg=T.C_ACCENT).pack(pady=(T.S_LG, T.S_SM))
+    # 定位：在 anchor（按钮）右下方，超出屏幕时回退居中
+    if anchor is not None:
+        parent.update_idletasks()
+        ax = anchor.winfo_rootx()
+        ay = anchor.winfo_rooty()
+        aw = anchor.winfo_width()
+        sw = dlg.winfo_screenwidth()
+        sh = dlg.winfo_screenheight()
+        x = ax + aw - W // 2
+        y = ay + anchor.winfo_height() + 10
+        if x < 10: x = 10
+        if y + H > sh - 10: y = sh - H - 10
+        if x + W > sw - 10: x = sw - W - 10
+        dlg.geometry(f"+{max(0,x)}+{max(0,y)}")
+
+    tk.Label(dlg, text="☕", font=(T.FONT_FAMILY, 32),
+             bg=T.C_BG, fg=T.C_ACCENT).pack(pady=(T.S_MD, T.S_XS))
     tk.Label(dlg, text="如果你喜欢这个工具",
-             font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
+             font=(T.FONT_FAMILY, T.F_SECTION + 2, "bold"),
              bg=T.C_BG, fg=T.C_TEXT).pack()
     tk.Label(dlg, text="可以请作者喝杯咖啡，感谢赞助",
-             font=(T.FONT_FAMILY, T.F_BODY),
+             font=(T.FONT_FAMILY, T.F_BODY + 1),
              bg=T.C_BG, fg=T.C_TEXT_M).pack(pady=(0, T.S_MD))
 
     codes = tk.Frame(dlg, bg=T.C_BG)
-    codes.pack(pady=(0, T.S_MD))
+    codes.pack(pady=(0, T.S_MD), expand=True, fill=tk.BOTH)
 
     alipay = _resource_path("assets/alipay.jpg")
     wechat = _resource_path("assets/wechatpay.jpg")
 
     def _load_code(path: Path, label: str) -> None:
         cell = tk.Frame(codes, bg=T.C_BG)
-        cell.pack(side=tk.LEFT, padx=T.S_MD)
+        cell.pack(side=tk.LEFT, padx=T.S_LG, expand=True)
         if path.exists():
             try:
                 from PIL import Image, ImageTk
                 img = Image.open(path)
-                img.thumbnail((160, 160))
+                # 按原图比例缩到 320x320 内，不拉伸不变形
+                img.thumbnail((320, 320), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
-                tk.Label(cell, image=photo, bg=T.C_BG).image = photo  # type: ignore[attr-defined]
-                tk.Label(cell, image=photo, bg=T.C_BG).pack()
-            except Exception:
-                tk.Label(cell, text=f"[{label}加载失败]",
+                lbl = tk.Label(cell, image=photo, bg="#ffffff",
+                               relief=tk.SOLID, bd=1)
+                lbl.image = photo  # type: ignore[attr-defined]
+                lbl.pack()
+            except Exception as e:
+                tk.Label(cell, text=f"[{label}加载失败: {e}]",
                          font=(T.FONT_FAMILY, T.F_SM),
                          bg=T.C_BG, fg=T.C_DANGER).pack()
         else:
             tk.Label(cell, text=f"[{label}\n待添加]",
-                     font=(T.FONT_FAMILY, T.F_SM), width=12, height=7,
+                     font=(T.FONT_FAMILY, T.F_SM), width=14, height=9,
                      bg="#e2e8f0", fg=T.C_TEXT_L, relief=tk.SOLID, bd=1).pack()
-        tk.Label(cell, text=label, font=(T.FONT_FAMILY, T.F_SM),
-                 bg=T.C_BG, fg=T.C_TEXT_M).pack(pady=(T.S_XS, 0))
+        tk.Label(cell, text=label, font=(T.FONT_FAMILY, T.F_BODY, "bold"),
+                 bg=T.C_BG, fg=T.C_TEXT_M).pack(pady=(T.S_SM, 0))
 
     _load_code(alipay, "支付宝")
     _load_code(wechat, "微信")
 
     tk.Button(dlg, text="关闭", command=dlg.destroy,
               font=(T.FONT_FAMILY, T.F_BODY),
-              bg=T.C_PRIMARY, fg="#ffffff", relief=tk.FLAT, padx=20, pady=4
+              bg=T.C_PRIMARY, fg="#ffffff", relief=tk.FLAT, padx=24, pady=6
               ).pack(pady=(0, T.S_MD))
 
 
@@ -136,12 +158,13 @@ def build(page: tk.Frame, app) -> None:
     # ---------- 赞助按钮（d2w v1.5.4 规范，secondary 浅底深字） ----------
     btn_row = tk.Frame(page, bg=T.C_BG)
     btn_row.pack(pady=(T.S_SM, 0))
-    tk.Button(btn_row, text="☕ 赞助作者",
+    sponsor_btn = tk.Button(btn_row, text="☕ 赞助作者",
               font=(T.FONT_FAMILY, T.F_BODY),
               bg="#f1f5f9", fg=T.C_TEXT, relief=tk.SOLID, bd=1,
               activebackground="#e2e8f0", activeforeground=T.C_TEXT,
-              padx=16, pady=6, cursor="hand2",
-              command=lambda: _show_sponsor_dialog(page)).pack()
+              padx=16, pady=6, cursor="hand2")
+    sponsor_btn.pack()
+    sponsor_btn.configure(command=lambda: _show_sponsor_dialog(page, sponsor_btn))
 
     tk.Label(page, text="© 2026 · 本地工具，数据不出本机",
              font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_TEXT_L,
