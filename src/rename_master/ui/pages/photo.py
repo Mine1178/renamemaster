@@ -32,6 +32,11 @@ WM_POSITIONS = [("右下角", "bottom_right"), ("左下角", "bottom_left"),
                 ("右上角", "top_right"), ("左上角", "top_left"),
                 ("底部居中", "bottom_center")]
 WM_POS_VALUE = dict(WM_POSITIONS)
+# (下拉显示文案, font_size_ratio)：字号 = 图片短边 × 比例
+WM_SIZE_OPTIONS = [("小", 0.012), ("中", 0.020), ("大", 0.035)]
+WM_SIZE_VALUE = dict(WM_SIZE_OPTIONS)
+WM_SIZE_DEFAULT = "中"
+WM_RATIO_DEFAULT = WM_SIZE_VALUE[WM_SIZE_DEFAULT]
 
 FILE_COLS = [("sel", "☑", 40, tk.CENTER), ("name", "文件名", 280, "w"),
              ("size", "大小", 90, tk.CENTER), ("dim", "尺寸", 120, tk.CENTER)]
@@ -66,6 +71,7 @@ def build(page: tk.Frame, app) -> None:
     # ---------- 页面状态 ----------
     st = {
         "files": [],          # List[Path]
+        "src_dir": tk.StringVar(value=""),   # 源目录（浏览 / 拖入共用）
         "mapping": {},        # {原文件名: 新文件名}
         "mode": tk.StringVar(value=app.cfg.get("photo.mode", "prefix")),
         "base": tk.StringVar(value=app.cfg.get("photo.base_name", "照片")),
@@ -79,7 +85,9 @@ def build(page: tk.Frame, app) -> None:
         "wm_on": tk.BooleanVar(value=bool(app.cfg.get("photo.wm_on", False))),
         "wm_text": tk.StringVar(value=str(app.cfg.get("photo.wm_text", ""))),
         "wm_pos": tk.StringVar(value=app.cfg.get("photo.wm_pos", "右下角")),
+        "wm_size": tk.StringVar(value=app.cfg.get("photo.wm_size", WM_SIZE_DEFAULT)),
         "out_dir": tk.StringVar(value=""),
+        "src_dir": tk.StringVar(value=""),   # 源文件夹（点「添加文件夹」或拖入时记录）
         "cancel": None,       # threading.Event，执行中非 None
     }
     app.selected_files = st["files"]      # 供其它页 / 调试读取
@@ -90,12 +98,31 @@ def build(page: tk.Frame, app) -> None:
                  accent=T.C_ACCENT)
     card1.pack(fill=tk.X, pady=(T.S_XS, T.S_MD))
 
+    # 源目录输入框：既可用「选择文件夹」浏览，也可从资源管理器拖入文件夹自动填
+    src_row = tk.Frame(card1.body, bg=T.C_CARD)
+    src_row.pack(fill=tk.X, pady=(0, T.S_SM))
+    tk.Label(src_row, text="源目录", font=(T.FONT_FAMILY, T.F_BODY),
+             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    src_entry = tk.Entry(src_row, textvariable=st["src_dir"], relief=tk.FLAT,
+                         bg=T.C_CARD, fg=T.C_TEXT,
+                         highlightbackground=T.C_BORDER, highlightthickness=1)
+    src_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=T.S_SM)
+    secondary_button(src_row, "📂 选择文件夹",
+                     command=lambda: _add_dir()).pack(side=tk.LEFT)
+
     bar = tk.Frame(card1.body, bg=T.C_CARD)
     bar.pack(fill=tk.X, pady=(0, T.S_SM))
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
-    secondary_button(bar, "📂 添加文件夹", command=lambda: _add_dir()).pack(side=tk.LEFT,
-                                                                       padx=T.S_SM)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
+
+    drow = tk.Frame(card1.body, bg=T.C_CARD)
+    drow.pack(fill=tk.X, pady=(T.S_XS, 0))
+    tk.Label(drow, text="选择文件夹", font=(T.FONT_FAMILY, T.F_BODY),
+             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    tk.Entry(drow, textvariable=st["src_dir"], relief=tk.FLAT, bg=T.C_CARD,
+             fg=T.C_TEXT, highlightbackground=T.C_BORDER,
+             highlightthickness=1).pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                        padx=(T.S_SM, 0))
 
     tree = styled_tree(card1.body, FILE_COLS, height=8)
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
@@ -125,7 +152,21 @@ def build(page: tk.Frame, app) -> None:
     def _add_dir() -> None:
         d = filedialog.askdirectory(title="选择照片文件夹")
         if d:
-            _extend(scanner.scan_files([d], scanner.IMAGE_EXTS))
+            set_source_dir(d)
+
+    def set_source_dir(path: str) -> None:
+        """统一入口：填源目录输入框 + 扫描该目录（拖入 / 浏览共用）。
+
+        用法见 app.apply_drop_path：在首页拖入时先暂存到 app.pending_drop_path，
+        切到本页后由 app 再回调这里。
+        """
+        raw = str(path or "").strip()
+        if not raw:
+            return
+        st["src_dir"].set(raw)
+        _extend(scanner.scan_files([raw], scanner.IMAGE_EXTS))
+        if not st["files"]:
+            app.set_status(f"源目录下没有可用的图片文件：{raw}", "warn")
 
     def _extend(new_files) -> None:
         known = {str(p.resolve()).lower() for p in st["files"]}
@@ -141,6 +182,7 @@ def build(page: tk.Frame, app) -> None:
 
     def _clear() -> None:
         st["files"].clear()
+        st["src_dir"].set("")
         _refresh_tree()
         app.set_status("已清空文件列表")
 
@@ -293,6 +335,13 @@ def build(page: tk.Frame, app) -> None:
     wm_pos_menu = tk.OptionMenu(wrow, st["wm_pos"], *[d for d, _ in WM_POSITIONS])
     wm_pos_menu.config(width=8)
     wm_pos_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
+    wm_size_label = tk.Label(wrow, text="字号", font=(T.FONT_FAMILY, T.F_BODY),
+                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
+    wm_size_label.pack(side=tk.LEFT, padx=(T.S_SM, 0))
+    wm_size_menu = tk.OptionMenu(wrow, st["wm_size"],
+                                 *[d for d, _ in WM_SIZE_OPTIONS])
+    wm_size_menu.config(width=3)
+    wm_size_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
 
     def _wm_focus_in(_event=None) -> None:
         if st["wm_text"].get() == WM_PLACEHOLDER:
@@ -317,9 +366,11 @@ def build(page: tk.Frame, app) -> None:
         state = tk.NORMAL if on else tk.DISABLED
         wm_entry.config(state=state)
         wm_pos_menu.config(state=state)
+        wm_size_menu.config(state=state)
         fg = T.C_TEXT_M if on else T.C_TEXT_FADE
         wm_text_label.config(fg=fg)
         wm_pos_label.config(fg=fg)
+        wm_size_label.config(fg=fg)
 
     # ---------- ⑤ 输出位置 ----------
     card4 = Card(page, "⑤ 输出位置", "默认输出到「<源目录>_重命名输出」，绝不原地覆盖",
@@ -373,6 +424,7 @@ def build(page: tk.Frame, app) -> None:
         # 水印是最后一步：先压缩到目标大小，再叠水印（避免水印被二次压缩糊掉）
         wm_text = _wm_text_value() if st["wm_on"].get() else ""
         wm_pos = WM_POS_VALUE.get(st["wm_pos"].get(), "bottom_right")
+        wm_ratio = WM_SIZE_VALUE.get(st["wm_size"].get(), WM_RATIO_DEFAULT)
         if target_kb <= 0 and not wm_text:
             return None
 
@@ -384,7 +436,8 @@ def build(page: tk.Frame, app) -> None:
                 data = compressor.compress_to_target(data, target_kb,
                                                      keep_exif=st["keep_exif"].get())
             if wm_text:
-                data = watermark.add_watermark(data, wm_text, position=wm_pos)
+                data = watermark.add_watermark(data, wm_text, position=wm_pos,
+                                               font_size_ratio=wm_ratio)
             return data
         return _fn
 
@@ -527,6 +580,7 @@ def build(page: tk.Frame, app) -> None:
     # 切页时只显示本页操作栏：pack(in_=) 只改布局不改父子关系，
     # 故已在 app._action_bars 里登记、靠 <Map> 事件互斥显示。
     key = next((k for k, v in app.pages.items() if v is page), "photo")
+    page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

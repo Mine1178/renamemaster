@@ -36,6 +36,7 @@ def build(page: tk.Frame, app) -> None:
 
     st = {
         "files": [],
+        "src_dir": tk.StringVar(value=""),   # 源目录（浏览 / 拖入共用）
         "base": tk.StringVar(value=app.cfg.get("sheet.base_name", "台账")),
         "digits": tk.StringVar(value=str(app.cfg.get("sheet.digits", 3))),
         "start": tk.StringVar(value=str(app.cfg.get("sheet.start", 1))),
@@ -49,11 +50,21 @@ def build(page: tk.Frame, app) -> None:
     card1 = Card(page, "① 选择文件", "添加要改名的表格文件（.xlsx / .xls / .csv）",
                  accent=T.C_ACCENT)
     card1.pack(fill=tk.X, pady=(T.S_XS, T.S_MD))
+    # 源目录输入框：既可用「选择文件夹」浏览，也可拖入文件夹自动填
+    src_row = tk.Frame(card1.body, bg=T.C_CARD)
+    src_row.pack(fill=tk.X, pady=(0, T.S_SM))
+    tk.Label(src_row, text="源目录", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+             fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    tk.Entry(src_row, textvariable=st["src_dir"], relief=tk.FLAT, bg=T.C_CARD,
+             fg=T.C_TEXT, highlightbackground=T.C_BORDER,
+             highlightthickness=1).pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                        padx=T.S_SM)
+    secondary_button(src_row, "📂 选择文件夹",
+                     command=lambda: _add_dir()).pack(side=tk.LEFT)
+
     bar = tk.Frame(card1.body, bg=T.C_CARD)
     bar.pack(fill=tk.X, pady=(0, T.S_SM))
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
-    secondary_button(bar, "📂 添加文件夹", command=lambda: _add_dir()).pack(side=tk.LEFT,
-                                                                       padx=T.S_SM)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
 
     tree = styled_tree(card1.body, FILE_COLS, height=8)
@@ -93,10 +104,25 @@ def build(page: tk.Frame, app) -> None:
     def _add_dir() -> None:
         d = filedialog.askdirectory(title="选择文件夹")
         if d:
-            _extend(scanner.scan_files([d], scanner.SPREADSHEET_EXTS))
+            set_source_dir(d)
+
+    def set_source_dir(path: str) -> None:
+        """统一入口：填源目录输入框 + 扫描该目录（拖入 / 浏览共用）。
+
+        用法见 app.apply_drop_path：在首页拖入时先暂存到 app.pending_drop_path，
+        切到本页后由 app 再回调这里。
+        """
+        raw = str(path or "").strip()
+        if not raw:
+            return
+        st["src_dir"].set(raw)
+        _extend(scanner.scan_files([raw], scanner.SPREADSHEET_EXTS))
+        if not st["files"]:
+            app.set_status(f"源目录下没有可用的表格文件：{raw}", "warn")
 
     def _clear() -> None:
         st["files"].clear()
+        st["src_dir"].set("")
         _refresh_tree()
         app.set_status("已清空文件列表")
 
@@ -274,6 +300,7 @@ def build(page: tk.Frame, app) -> None:
                                mode="determinate", maximum=1, value=0)
 
     key = next((k for k, v in app.pages.items() if v is page), "spreadsheet")
+    page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

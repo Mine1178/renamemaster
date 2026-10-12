@@ -43,6 +43,7 @@ class App:
         self._page_builders: Dict[str, Callable[[], None]] = {}
         self._closed = False
         self.cur = "home"
+        self.pending_drop_path: Optional[str] = None   # 页面未 build 时先存着
         self.cfg = config or ConfigManager()
 
         self.root.title(f"{APP_TITLE} · {APP_SUBTITLE}")
@@ -313,6 +314,7 @@ class App:
             p.pack_forget()
         self.pages[key].pack(fill=tk.BOTH, expand=True)
         self.cur = key
+        self._flush_pending_drop()
         # 切页后回到顶部并按新页重算滚动区（否则沿用旧页高度/滚动位置）
         try:
             self.canvas.yview_moveto(0)
@@ -389,6 +391,36 @@ class App:
         from rename_master.ui.pages.about import build
         build(f, self)
         self._mount_action_bar()
+
+    # ---------- 拖放（drag & drop）----------
+    def _source_setter(self):
+        """当前页面的 set_source_dir 方法；页面未 build 或不支持拖入则 None。"""
+        page = self.pages.get(self.cur)
+        return getattr(page, "set_source_dir", None) if page is not None else None
+
+    def apply_drop_path(self, path: str) -> bool:
+        """把拖入的源目录交给当前页面；页面还没 build 就先暂存，等切到该页再补。
+
+        首页（home）/ 关于（about）没有源目录输入框，此时挂到 pending_drop_path，
+        用户切到 photo / spreadsheet / document 时由 _flush_pending_drop 应用。
+        返回 True 表示已当场填入，False 表示已暂存。
+        """
+        setter = self._source_setter()
+        if setter is None:
+            self.pending_drop_path = path
+            self.set_status("已记住拖入目录，切到功能页自动填入")
+            return False
+        setter(path)
+        return True
+
+    def _flush_pending_drop(self) -> None:
+        """切页后把暂存的拖入目录补发给已 build 完成的页面（用完即清）。"""
+        path = self.pending_drop_path
+        setter = self._source_setter()
+        if not path or setter is None:
+            return
+        self.pending_drop_path = None
+        setter(path)
 
     # ---------- 公共小工具 ----------
     def set_status(self, text: str, kind: str = "info") -> None:

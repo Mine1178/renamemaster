@@ -15,7 +15,10 @@ if str(_SRC) not in sys.path:
 import logging
 import tkinter as tk
 
+from tkinterdnd2 import DND_FILES, TkinterDnD
+
 from rename_master.ui.app import App
+from rename_master.ui.dnd import make_drop_handler
 
 logger = logging.getLogger("rename_master.main")
 
@@ -38,13 +41,16 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     _enable_high_dpi()
-    root = tk.Tk()
+    # TkinterDnD.Tk 是 tk.Tk 的子类：换成它整个窗口（含子孙）才支持接收拖入
+    root = TkinterDnD.Tk()
     _apply_app_icon(root)
     try:
-        App(root)
+        app = App(root)
     except Exception:
         logger.exception("App 初始化失败")
         raise
+    root.drop_target_register(DND_FILES)
+    root.dnd_bind("<<Drop>>", make_drop_handler(app))
     root.mainloop()
 
 
