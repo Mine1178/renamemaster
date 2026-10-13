@@ -23,6 +23,15 @@ PREVIEW_COLS = [("old", "原文件名", 260, "w"), ("new", "新文件名", 260, 
 STATUS_COLOR = {"ok": T.C_SUCCESS, "warn": T.C_WARNING, "error": T.C_DANGER}
 
 
+def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -> tk.Radiobutton:
+    """卡片内统一风格的单选钮（白底，避免 ttk 主题在 Win 上的灰块）。"""
+    return tk.Radiobutton(master, text=text, variable=variable, value=value,
+                          command=command, bg=T.C_CARD, fg=T.C_TEXT,
+                          activebackground=T.C_CARD, activeforeground=T.C_ACCENT,
+                          selectcolor=T.C_CARD, highlightthickness=0,
+                          font=(T.FONT_FAMILY, T.F_BODY), anchor="w", cursor="hand2")
+
+
 def _check(master, text: str, variable: tk.Variable, command=None) -> tk.Checkbutton:
     return tk.Checkbutton(master, text=text, variable=variable, command=command,
                           bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
@@ -136,18 +145,10 @@ def build(page: tk.Frame, app) -> None:
 
     mode_row = tk.Frame(card2.body, bg=T.C_CARD)
     mode_row.pack(fill=tk.X)
-    tk.Radiobutton(mode_row, text="模式一：统一前缀+序号", variable=st["mode"],
-                   value="prefix", command=lambda: _sync_mode(),
-                   bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
-                   activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
-                   highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
-                   anchor="w", cursor="hand2").pack(side=tk.LEFT)
-    tk.Radiobutton(mode_row, text="模式二：一一对照（Excel）", variable=st["mode"],
-                   value="map", command=lambda: _sync_mode(),
-                   bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
-                   activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
-                   highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
-                   anchor="w", cursor="hand2").pack(side=tk.LEFT, padx=T.S_MD)
+    _radio(mode_row, "模式一：统一前缀+序号", st["mode"], "prefix",
+           command=lambda: _sync_mode()).pack(side=tk.LEFT)
+    _radio(mode_row, "模式二：一一对照（Excel）", st["mode"], "map",
+           command=lambda: _sync_mode()).pack(side=tk.LEFT, padx=T.S_MD)
 
     # 模式一控件（与照片页对齐：基础名称独占一行，其余横向排）
     prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
