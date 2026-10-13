@@ -10,8 +10,9 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import doc_extract, mapper, renamer, scanner
-from rename_master.ui import theme as T
+from rename_master.core import (doc_extract, history, mapper, naming_vars,
+                                renamer, scanner)
+from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
@@ -67,6 +68,7 @@ def build(page: tk.Frame, app) -> None:
         "titles": {},          # {文件绝对路径: 正文前 30 字}
         "out_dir": tk.StringVar(value=""),
         "cancel": None,
+        "adv": advanced.create_vars(app, "pdf"),
     }
 
     # ---------- ① 选择文件 ----------
@@ -283,6 +285,8 @@ def build(page: tk.Frame, app) -> None:
             map_box.pack_forget()
         app.request_relayout()
 
+    advanced.build_card(page, app, st["adv"])
+
     # ---------- ③ 输出位置 ----------
     card3 = Card(page, "③ 输出位置", "输出到独立目录，源文件零改动", accent=T.C_SUCCESS)
     card3.pack(fill=tk.X, pady=(0, T.S_MD))
@@ -314,30 +318,37 @@ def build(page: tk.Frame, app) -> None:
 
     def _rule() -> dict:
         start, digits = _nums()
-        return {"base_name": st["base"].get().strip(), "digits": digits,
+        rule = {"base_name": st["base"].get().strip(), "digits": digits,
                 "start": start, "sep": st["sep"].get(),
                 "keep_ext": st["keep_ext"].get()}
+        return advanced.apply_to_rule(rule, st["adv"])
 
     def _make_plans():
         """模式二走对照表；模式一按是否勾选正文提取走对照或纯前缀。"""
         if st["mode"].get() == "map":
+            rule = {"mapping": dict(st["mapping"]),
+                    "keep_ext": st["keep_ext"].get()}
             return renamer.plan_rename(
                 st["files"], renamer.MODE_MAP,
-                {"mapping": dict(st["mapping"]),
-                 "keep_ext": st["keep_ext"].get()})
+                advanced.apply_to_rule(rule, st["adv"]))
         start, digits = _nums()
         if not st["use_content"].get():
             return renamer.plan_rename(st["files"], renamer.MODE_PREFIX, _rule())
-        prefix = st["base"].get().strip()
+        # 正文组装：先按排序设置决定序号顺序（与引擎排序保持一致）
+        sr: dict = {}
+        advanced.apply_to_rule(sr, st["adv"])
+        ordered = renamer._sort_paths(st["files"], sr.get("sort_by", ""),
+                                      bool(sr.get("sort_desc", False)))
         sep = st["sep"].get()
         mapping = {}
-        for i, p in enumerate(st["files"]):
+        for i, p in enumerate(ordered):
             body = st["titles"].get(str(p), "")
             number = f"{start + i:0{digits}d}"
-            mapping[p.name] = sep.join(x for x in (prefix, body, number) if x)
+            pref = naming_vars.render_template(p, st["base"].get().strip())
+            mapping[p.name] = sep.join(x for x in (pref, body, number) if x)
+        rule = {"mapping": mapping, "keep_ext": st["keep_ext"].get()}
         return renamer.plan_rename(st["files"], renamer.MODE_MAP,
-                                   {"mapping": mapping,
-                                    "keep_ext": st["keep_ext"].get()})
+                                   advanced.apply_to_rule(rule, st["adv"]))
 
     def _validate() -> bool:
         if not st["files"]:
@@ -469,6 +480,9 @@ def build(page: tk.Frame, app) -> None:
             _reset_bar()
             app.cfg.set("output.last_dir", str(out_dir))
             app.cfg.set("output.last_count", result["done"])
+            advanced.save_prefs(app, "pdf", st["adv"])
+            if result["done"]:
+                history.record_batch("pdf", out_dir, plans, result)
             app.cfg.save()
             bar_state.config(text=f"完成 {result['done']}/{result['total']}"
                                   f"（失败 {result['failed']}）")
@@ -489,6 +503,8 @@ def build(page: tk.Frame, app) -> None:
     bar_btn_preview = secondary_button(left, "👁 预览",
                                        command=lambda: _open_preview())
     bar_btn_preview.pack(side=tk.LEFT)
+    secondary_button(left, "↩ 撤销", command=app.undo_last_batch
+                     ).pack(side=tk.LEFT, padx=(T.S_SM, 0))
     bar_state = vlabel(left, text="", font=(T.FONT_FAMILY, T.F_SM),
                          bg=T.C_BG, fg=T.C_TEXT_L)
     bar_state.pack(side=tk.LEFT, padx=T.S_SM)
@@ -506,6 +522,7 @@ def build(page: tk.Frame, app) -> None:
 
     key = next((k for k, v in app.pages.items() if v is page), "pdf")
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
+    page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

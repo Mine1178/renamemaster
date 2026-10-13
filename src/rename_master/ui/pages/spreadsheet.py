@@ -9,8 +9,8 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import mapper, renamer, scanner
-from rename_master.ui import theme as T
+from rename_master.core import history, mapper, renamer, scanner
+from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
@@ -60,6 +60,7 @@ def build(page: tk.Frame, app) -> None:
         "keep_ext": tk.BooleanVar(value=bool(app.cfg.get("sheet.keep_ext", True))),
         "out_dir": tk.StringVar(value=""),
         "cancel": None,
+        "adv": advanced.create_vars(app, "sheet"),
     }
 
     # ---------- ① 选择文件 ----------
@@ -270,6 +271,8 @@ def build(page: tk.Frame, app) -> None:
             map_box.pack_forget()
         app.request_relayout()
 
+    advanced.build_card(page, app, st["adv"])
+
     # ---------- ③ 输出位置 ----------
     card3 = Card(page, "③ 输出位置", "输出到独立目录，源文件零改动", accent=T.C_SUCCESS)
     card3.pack(fill=tk.X, pady=(0, T.S_MD))
@@ -290,19 +293,21 @@ def build(page: tk.Frame, app) -> None:
     # ---------- 规则 / 预览 / 执行 ----------
     def _rule() -> dict:
         if st["mode"].get() == "map":
-            return {"mapping": dict(st["mapping"]),
+            rule = {"mapping": dict(st["mapping"]),
                     "keep_ext": st["keep_ext"].get()}
-        try:
-            start = int(str(st["start"].get()).strip())
-        except ValueError:
-            start = 1
-        try:
-            digits = int(str(st["digits"].get()).strip())
-        except ValueError:
-            digits = 3
-        return {"base_name": st["base"].get().strip(), "digits": digits,
-                "start": start, "sep": st["sep"].get(),
-                "keep_ext": st["keep_ext"].get()}
+        else:
+            try:
+                start = int(str(st["start"].get()).strip())
+            except ValueError:
+                start = 1
+            try:
+                digits = int(str(st["digits"].get()).strip())
+            except ValueError:
+                digits = 3
+            rule = {"base_name": st["base"].get().strip(), "digits": digits,
+                    "start": start, "sep": st["sep"].get(),
+                    "keep_ext": st["keep_ext"].get()}
+        return advanced.apply_to_rule(rule, st["adv"])
 
     def _make_plans():
         mode = renamer.MODE_MAP if st["mode"].get() == "map" else renamer.MODE_PREFIX
@@ -392,6 +397,9 @@ def build(page: tk.Frame, app) -> None:
             bar_btn_run.config(state=tk.NORMAL)
             app.cfg.set("output.last_dir", str(out_dir))
             app.cfg.set("output.last_count", result["done"])
+            advanced.save_prefs(app, "sheet", st["adv"])
+            if result["done"]:
+                history.record_batch("spreadsheet", out_dir, plans, result)
             app.cfg.save()
             bar_state.config(text=f"完成 {result['done']}/{result['total']}"
                                   f"（失败 {result['failed']}）")
@@ -410,6 +418,8 @@ def build(page: tk.Frame, app) -> None:
     left = tk.Frame(bar, bg=T.C_BG)
     left.pack(side=tk.LEFT)
     secondary_button(left, "👁 预览", command=lambda: _open_preview()).pack(side=tk.LEFT)
+    secondary_button(left, "↩ 撤销", command=app.undo_last_batch
+                     ).pack(side=tk.LEFT, padx=(T.S_SM, 0))
     bar_state = vlabel(left, text="", font=(T.FONT_FAMILY, T.F_SM),
                          bg=T.C_BG, fg=T.C_TEXT_L)
     bar_state.pack(side=tk.LEFT, padx=T.S_SM)
@@ -427,6 +437,7 @@ def build(page: tk.Frame, app) -> None:
 
     key = next((k for k, v in app.pages.items() if v is page), "spreadsheet")
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
+    page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

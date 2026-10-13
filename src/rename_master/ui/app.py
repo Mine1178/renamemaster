@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Callable, Dict, Optional
 
 from rename_master.config.manager import ConfigManager
@@ -450,6 +450,30 @@ class App:
             return
         self.pending_drop_path = None
         setter(path)
+
+    # ---------- 撤销 ----------
+    def undo_last_batch(self) -> None:
+        """撤销最近一次执行：删除该批次生成的文件（跨重启也可撤销）。"""
+        from rename_master.core import history
+
+        batch = history.recent_batch()
+        if not batch:
+            messagebox.showinfo("撤销", "没有可撤销的历史记录。")
+            return
+        n = len(batch.get("items", []))
+        msg = (f"将撤销最近一次「{batch.get('page_name')}」批次\n"
+               f"时间：{batch.get('time')}\n"
+               f"文件数：{n}\n"
+               f"输出目录：{batch.get('output_dir')}\n\n"
+               f"确定删除本次生成的 {n} 个文件吗？")
+        if not messagebox.askyesno("确认撤销", msg, icon="warning"):
+            return
+        result = history.undo_batch(batch)
+        self.set_status(f"已撤销，删除 {result['deleted']} 个文件", "ok")
+        messagebox.showinfo(
+            "撤销完成",
+            f"已删除 {result['deleted']} 个文件。\n"
+            f"（{result['missing']} 个文件此前已不存在）")
 
     # ---------- 公共小工具 ----------
     def set_status(self, text: str, kind: str = "info") -> None:

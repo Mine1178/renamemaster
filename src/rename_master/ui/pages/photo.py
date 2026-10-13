@@ -7,8 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import compressor, mapper, renamer, scanner, watermark
-from rename_master.ui import theme as T
+from rename_master.core import (compressor, history, mapper, renamer, scanner,
+                               watermark)
+from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
@@ -121,6 +122,7 @@ def build(page: tk.Frame, app) -> None:
         "out_dir": tk.StringVar(value=""),
         "src_dir": tk.StringVar(value=""),   # 源文件夹（点「添加文件夹」或拖入时记录）
         "cancel": None,       # threading.Event，执行中非 None
+        "adv": advanced.create_vars(app, "photo"),
     }
     app.selected_files = st["files"]      # 供其它页 / 调试读取
     app.mapping = st["mapping"]
@@ -518,6 +520,8 @@ def build(page: tk.Frame, app) -> None:
             label.config(fg=fg)
         wm_logo_label.config(fg=fg)
 
+    advanced.build_card(page, app, st["adv"])
+
     # ---------- ⑤ 输出位置 ----------
     card4 = Card(page, "⑤ 输出位置", "默认输出到「<源目录>_重命名输出」，绝不原地覆盖",
                  accent=T.C_SUCCESS)
@@ -548,19 +552,21 @@ def build(page: tk.Frame, app) -> None:
 
     def _build_rule() -> dict:
         if st["mode"].get() == "map":
-            return {"mapping": dict(st["mapping"]),
+            rule = {"mapping": dict(st["mapping"]),
                     "keep_ext": st["keep_ext"].get()}
-        try:
-            start = int(str(st["start"].get()).strip())
-        except ValueError:
-            start = 1
-        try:
-            digits = int(str(st["digits"].get()).strip())
-        except ValueError:
-            digits = 3
-        return {"base_name": st["base"].get().strip(), "digits": digits,
-                "start": start, "sep": st["sep"].get(),
-                "keep_ext": st["keep_ext"].get()}
+        else:
+            try:
+                start = int(str(st["start"].get()).strip())
+            except ValueError:
+                start = 1
+            try:
+                digits = int(str(st["digits"].get()).strip())
+            except ValueError:
+                digits = 3
+            rule = {"base_name": st["base"].get().strip(), "digits": digits,
+                    "start": start, "sep": st["sep"].get(),
+                    "keep_ext": st["keep_ext"].get()}
+        return advanced.apply_to_rule(rule, st["adv"])
 
     def _make_plans():
         mode = renamer.MODE_MAP if st["mode"].get() == "map" else renamer.MODE_PREFIX
@@ -695,6 +701,9 @@ def build(page: tk.Frame, app) -> None:
             bar_btn_run.config(state=tk.NORMAL)
             app.cfg.set("output.last_dir", str(out_dir))
             app.cfg.set("output.last_count", result["done"])
+            advanced.save_prefs(app, "photo", st["adv"])
+            if result["done"]:
+                history.record_batch("photo", out_dir, plans, result)
             app.cfg.save()
             bar_state.config(text=f"完成 {result['done']}/{result['total']}"
                                   f"（失败 {result['failed']}）")
@@ -716,6 +725,8 @@ def build(page: tk.Frame, app) -> None:
     left.pack(side=tk.LEFT)
     secondary_button(left, "👁 预览改名结果",
                      command=lambda: _open_preview()).pack(side=tk.LEFT)
+    secondary_button(left, "↩ 撤销", command=app.undo_last_batch
+                     ).pack(side=tk.LEFT, padx=(T.S_SM, 0))
     bar_state = vlabel(left, text="", font=(T.FONT_FAMILY, T.F_SM),
                          bg=T.C_BG, fg=T.C_TEXT_L)
     bar_state.pack(side=tk.LEFT, padx=T.S_SM)
@@ -735,6 +746,7 @@ def build(page: tk.Frame, app) -> None:
     # 故已在 app._action_bars 里登记、靠 <Map> 事件互斥显示。
     key = next((k for k, v in app.pages.items() if v is page), "photo")
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
+    page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

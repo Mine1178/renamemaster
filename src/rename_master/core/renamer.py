@@ -9,13 +9,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Sequence
 
-from rename_master.core import scanner
+from rename_master.core import naming_vars, scanner
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class RenamePlan:
 
 # ---------- 模式一：统一前缀 + 序号 ----------
 def _prefix_name(src: Path, index: int, rule: Dict) -> str:
-    base = str(rule.get("base_name") or "").strip()
+    base = naming_vars.render_template(src, str(rule.get("base_name") or "").strip())
     digits = int(rule.get("digits", 3) or 3)
     start = int(rule.get("start", 1) or 1)
     sep = str(rule.get("sep", "_") or "")
@@ -110,6 +111,49 @@ def _map_name(src: Path, index: int, mapping: Dict[str, str]) -> tuple:
     return None, False
 
 
+def _sort_paths(paths: Sequence[Path], sort_by: str, desc: bool) -> List[Path]:
+    """按排序键决定序号顺序（不改原始显示，只影响本次计划的序号）。"""
+    sort_by = str(sort_by or "").lower()
+    if sort_by not in ("name", "mtime", "size", "exif"):
+        return list(paths)
+
+    def _key(p: Path):
+        try:
+            stt = p.stat()
+        except OSError:
+            return ""
+        if sort_by == "name":
+            return p.name.lower()
+        if sort_by == "size":
+            return stt.st_size
+        if sort_by == "exif":
+            shot = naming_vars.exif_datetime(p)
+            return shot.timestamp() if shot else stt.st_mtime
+        return stt.st_mtime  # mtime
+
+    try:
+        return sorted(paths, key=_key, reverse=desc)
+    except (OSError, TypeError):
+        return list(paths)
+
+
+def _apply_find_replace(stem: str, rule: Dict, plan: RenamePlan) -> str:
+    """对主名（不含扩展名）做查找替换；支持正则捕获组。正则非法时退回原串。"""
+    find = str(rule.get("find") or "")
+    if not find:
+        return stem
+    repl = str(rule.get("repl") if rule.get("repl") is not None else "")
+    try:
+        if bool(rule.get("use_regex", False)):
+            result = re.sub(find, repl, stem)
+        else:
+            result = stem.replace(find, repl)
+    except re.error as exc:
+        plan.add_warning(f"正则表达式有误，已忽略替换：{exc}")
+        return stem
+    return result
+
+
 def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> List[RenamePlan]:
     """生成改名计划（**纯内存，不写盘**）。
 
@@ -121,6 +165,8 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
     """
     rule = dict(rule or {})
     paths = [Path(f) for f in (files or [])]
+    paths = _sort_paths(paths, str(rule.get("sort_by", "")),
+                        bool(rule.get("sort_desc", False)))
     mapping: Dict[str, str] = dict(rule.get("mapping") or {}) if mode == MODE_MAP else {}
     keep_ext = bool(rule.get("keep_ext", True))
 
@@ -162,6 +208,11 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
             plan.add_warning("新名含非法字符，已替换为 _")
         if not Path(plan.dst_name).suffix:
             plan.dst_name = f"{plan.dst_name}{src.suffix}"
+        # 查找替换：只作用于主名（扩展名保持），支持正则捕获组
+        f_stem, f_ext = os.path.splitext(plan.dst_name)
+        replaced = _apply_find_replace(f_stem, rule, plan)
+        if replaced != f_stem:
+            plan.dst_name = f"{replaced}{f_ext}"
         if not plan.dst_name or plan.dst_name.startswith("."):
             plan.mark_error("新文件名为空")
             plans.append(plan)
@@ -220,6 +271,7 @@ def execute_plan(plans: Sequence[RenamePlan],
     total = len(plans)
     done = failed = skipped = 0
     errors: List[str] = []
+    done_names: List[str] = []
     out_resolved = out_dir.resolve()
 
     for i, plan in enumerate(plans):
@@ -263,6 +315,7 @@ def execute_plan(plans: Sequence[RenamePlan],
                 shutil.copy2(str(src), str(bak_dir / src.name))
             plan.new_size = new_size
             done += 1
+            done_names.append(plan.dst_name)
             if log_path is not None:
                 with open(log_path, "a", encoding="utf-8") as fh:
                     fh.write(f"{src.name} → {plan.dst_name} | "
@@ -275,4 +328,4 @@ def execute_plan(plans: Sequence[RenamePlan],
     if progress is not None:
         progress(total, total, "完成")
     return {"total": total, "done": done, "failed": failed, "skipped": skipped,
-            "output_dir": str(out_dir), "errors": errors}
+            "output_dir": str(out_dir), "errors": errors, "done_names": done_names}
