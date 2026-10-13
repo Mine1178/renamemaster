@@ -1,4 +1,4 @@
-"""照片批量命名页：选文件 → 命名模式 → 压缩 → 输出 → 预览 / 执行（任务书 §4.6.2）。"""
+﻿"""照片批量命名页：选文件 → 命名模式 → 压缩 → 输出 → 预览 / 执行（任务书 §4.6.2）。"""
 from __future__ import annotations
 
 import threading
@@ -281,7 +281,7 @@ def build(page: tk.Frame, app) -> None:
     map_tree.pack(fill=tk.X, pady=(T.S_SM, 0))
     map_hint = hint_label(map_box,
                           "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。")
-    map_hint.config(wraplength=320)          # 并排后卡片变窄，说明需换行
+    map_hint.config(wraplength=500)
     map_hint.pack(fill=tk.X)
 
     def _import_map() -> None:
