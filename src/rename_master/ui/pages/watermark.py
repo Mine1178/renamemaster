@@ -75,8 +75,8 @@ def _menu(master, variable, options, width=6):
 
 
 def build(page: tk.Frame, app) -> None:
-    PageHeader(page, "水印（批量添加 / 提取）",
-               "可见水印（斜向平铺 / 角落单处，任意颜色）+ 隐形盲水印（版权溯源，抗压缩）")
+    PageHeader(page, "添加水印",
+               "可见水印（斜向平铺 / 角落单处，任意颜色）+ 隐形盲水印（嵌入版权信息、提取取证）")
 
     # ---------- 页面状态 ----------
     st = {

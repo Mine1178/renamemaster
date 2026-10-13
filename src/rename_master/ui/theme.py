@@ -24,6 +24,8 @@ C_SUCCESS = "#16a34a"        # 状态正常（绿 ✓）
 C_DANGER = "#dc2626"         # 状态错误（红 ✗）
 C_WARNING = "#ca8a04"        # 状态警告（黄 ⚠）
 C_INFO = "#2563eb"           # 信息蓝
+C_CYAN = "#0891b2"           # 青色（水印入口）
+C_PURPLE = "#7c3aed"         # 紫色（PDF 入口）
 C_WHITE = "#ffffff"          # 强调按钮前景
 
 FONT_FAMILY = "微软雅黑"

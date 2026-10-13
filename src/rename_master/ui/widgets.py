@@ -142,13 +142,15 @@ class Card(tk.Frame):
         self.collapsible = collapsible
         self.collapsed = False
         self.toggle_btn = None
+        self._title = None
         if collapsible:
             head = tk.Frame(self, bg=T.C_CARD)
             head.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(T.S_MD, T.S_XS))
-            self._title = SelectableText(head, title,
-                                         font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
-                                         bg=T.C_CARD, fg=T.C_TEXT)
-            self._title.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            if title:
+                self._title = SelectableText(head, title,
+                                             font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
+                                             bg=T.C_CARD, fg=T.C_TEXT)
+                self._title.pack(side=tk.LEFT, fill=tk.X, expand=True)
             self.toggle_btn = tk.Button(head, text="▼", command=self.toggle,
                                         font=(T.FONT_FAMILY, T.F_BODY),
                                         bg=T.C_CARD, fg=T.C_TEXT_M,
@@ -157,7 +159,7 @@ class Card(tk.Frame):
                                         bd=0, relief=tk.FLAT, width=2,
                                         cursor="hand2")
             self.toggle_btn.pack(side=tk.RIGHT)
-        else:
+        elif title:
             self._title = SelectableText(self, title,
                                          font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
                                          bg=T.C_CARD, fg=T.C_TEXT)
@@ -314,7 +316,7 @@ class SelectableText(tk.Text):
     """
 
     def __init__(self, master, text: str = "", *, bg=T.C_CARD, fg=T.C_TEXT_L,
-                 font=None, wrap="none", **kw):
+                 font=None, wrap="none", compact: bool = False, **kw):
         # 兼容 Label 常见但 Text 不支持的布局参数
         kw.pop("anchor", None)
         justify = kw.pop("justify", tk.LEFT)
@@ -323,6 +325,7 @@ class SelectableText(tk.Text):
         self._font_tuple = font
         self._font_obj = _build_font(font)
         self._raw_text = text
+        self._compact = compact       # True：高度紧贴显示行数，不留底部空行
         self._wrap_word = (wrap == "word")
         if self._wrap_word:
             width_chars, height_lines = 80, 1
@@ -358,13 +361,18 @@ class SelectableText(tk.Text):
             return max(1, len(text))
 
     def _auto_height(self, _event=None):
-        """wrap=word 模式：按实际显示行数（含自动换行）撑开高度。"""
+        """wrap=word 模式：按实际显示行数（含自动换行）撑开高度。
+
+        compact：高度=显示行数，紧贴内容（用于单行居中的装饰元素）；
+        否则多留一行，避免多行段落末行被裁。
+        """
         self.update_idletasks()
         try:
             res = self.count("1.0", "end-1c", "displaylines")
-            lines = (res[0] if res else 1) + 1
+            shown = res[0] if res else 1
         except tk.TclError:
-            lines = 1
+            shown = 1
+        lines = shown if self._compact else shown + 1
         if int(self.cget("height")) != lines:
             self.config(height=lines)
 

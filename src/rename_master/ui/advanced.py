@@ -57,7 +57,7 @@ def build_card(page, app, adv: dict) -> Card:
     """构建「高级选项」卡片：排序一行、查找替换一行、变量说明一行。"""
     card = Card(page, "高级选项（可选）",
                 "排序决定序号顺序 · 查找替换批量改字 · 基础名称支持日期变量",
-                accent=T.C_INFO)
+                accent=T.C_INFO, collapsible=True, start_collapsed=True)
     card.pack(fill=tk.X, pady=(0, T.S_MD))
 
     # ---- 排序行 ----

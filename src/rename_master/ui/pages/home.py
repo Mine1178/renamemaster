@@ -9,12 +9,19 @@ from rename_master.ui.widgets import Card, PageHeader, vlabel
 # 窗口宽度 → 卡片列数（<1100px 收成 1 列，任务书 §4.6.1）
 _WIDE_MIN = 1100
 _MID_MIN = 760
+_GAP = T.S_MD            # 卡片之间固定间距 12px
 
 # (emoji, 标题, 顶条色, 描述, 页面 key)
 ENTRIES = [
     ("📷", "照片批量命名", T.C_ACCENT,
      "统一前缀 + 序号，或按 Excel 对照表一一改名；可顺带压到 1M / 500K / 200K。",
      "photo"),
+    ("💧", "添加水印", T.C_CYAN,
+     "斜向平铺（裁不掉）或角落单处，任意颜色 + 描边；支持隐形盲水印版权溯源。",
+     "watermark"),
+    ("📕", "PDF 批量命名", T.C_PURPLE,
+     "按正文开头、统一前缀序号或 Excel 对照表，给一堆 PDF 快速规范取名。",
+     "pdf"),
     ("📊", "表格批量命名", T.C_INFO,
      "一堆「新建 XLS 表.xlsx」按规则统一取名，支持 .xlsx / .xls / .csv。",
      "spreadsheet"),
@@ -23,8 +30,10 @@ ENTRIES = [
      "document"),
 ]
 
-# 入口卡片最小高度 180px：描述下面垫一个空 Frame 撑起来（列宽变化时高度不塌）
-_SPACER_H = 56
+# 入口卡片底部留白：描述下垫一个空 Frame，保证卡片等高且「进入 →」不贴描述
+_SPACER_H = 24
+# 网格最多用到的列（3 卡片列 + 2 间隔列 = 0..4）
+_MAX_GRID_COL = 5
 
 
 def _shorten(text: str, limit: int = 56) -> str:
@@ -39,7 +48,7 @@ def _shorten(text: str, limit: int = 56) -> str:
 
 def build(page: tk.Frame, app) -> None:
     PageHeader(page, "文件批量命名助手",
-               "一键批量改名 · 图片压缩 · 表格文档统一处理")
+               "批量改名 · 图片压缩 · 添加水印 · 文档 / 表格 / PDF 一键处理")
 
     grid = tk.Frame(page, bg=T.C_BG)
     grid.pack(fill=tk.X, pady=(T.S_XS, T.S_MD))
@@ -47,18 +56,19 @@ def build(page: tk.Frame, app) -> None:
     cards = []
     descs = []
     for emoji, title, accent, desc, key in ENTRIES:
-        for col in range(3):
-            grid.grid_columnconfigure(col, weight=1, uniform="home_card")
         card = Card(grid, title="", accent=accent,
                     on_click=lambda k=key: app.show(k))
-        # body 自上而下：大号 emoji → 标题 → 描述
-        vlabel(card.body, emoji, font=(T.FONT_FAMILY, 28),
-               bg=T.C_CARD, fg=accent).pack(fill=tk.X)
+        # body 自上而下：大号 emoji → 标题 → 描述（全部居中）
+        vlabel(card.body, emoji, font=(T.FONT_FAMILY, 30),
+               bg=T.C_CARD, fg=accent, wrap="word", compact=True,
+               justify=tk.CENTER).pack(fill=tk.X, pady=(T.S_SM, 0))
         vlabel(card.body, title, font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
-               bg=T.C_CARD, fg=T.C_TEXT).pack(fill=tk.X, pady=(T.S_XS, 0))
+               bg=T.C_CARD, fg=T.C_TEXT, wrap="word", compact=True,
+               justify=tk.CENTER).pack(fill=tk.X, pady=(T.S_SM, 0))
         d = vlabel(card.body, desc, font=(T.FONT_FAMILY, T.F_BODY),
-                   bg=T.C_CARD, fg=T.C_TEXT_SUB, wrap="word")
-        d.pack(fill=tk.X, pady=(T.S_XS, 0))
+                   bg=T.C_CARD, fg=T.C_TEXT_SUB, wrap="word", compact=True,
+                   justify=tk.CENTER)
+        d.pack(fill=tk.X, pady=(T.S_SM, 0))
         descs.append(d)
         tk.Frame(card.body, bg=T.C_CARD, height=_SPACER_H).pack(fill=tk.X)
         cards.append(card)
@@ -68,15 +78,26 @@ def build(page: tk.Frame, app) -> None:
             if hasattr(d, "_auto_height"):
                 d._auto_height()
 
+    def _configure_columns(ncols: int) -> None:
+        """卡片列(偶数列, weight=1 uniform) + 固定间隔列(奇数列, minsize=_GAP)。"""
+        for c in range(ncols):
+            grid.grid_columnconfigure(c * 2, weight=1, uniform="home_card")
+            if c < ncols - 1:
+                grid.grid_columnconfigure(c * 2 + 1, weight=0, minsize=_GAP,
+                                          uniform="")
+        # 响应式收列时，关掉不再使用的旧列（否则残留权重 / 宽度）
+        for old in range(ncols * 2 - 1, _MAX_GRID_COL + 1):
+            grid.grid_columnconfigure(old, weight=0, minsize=0, uniform="")
+
     def _relayout(cols: int) -> None:
         for c in cards:
             c.grid_forget()
-        for col in range(cols):
-            grid.grid_columnconfigure(col, weight=1, uniform="home_card")
+        _configure_columns(cols)
+        total_rows = -(-len(cards) // cols)
         for i, c in enumerate(cards):
-            c.grid(row=i // cols, column=i % cols, sticky="nsew",
-                   padx=(0, T.S_MD) if (i % cols) < cols - 1 else 0,
-                   pady=(0, T.S_MD) if i < len(cards) - cols else 0)
+            r, cc = i // cols, i % cols
+            pady = (0, _GAP) if r < total_rows - 1 else (0, 0)
+            c.grid(row=r, column=cc * 2, sticky="nsew", pady=pady)
         _fit_descs()
 
     state = {"cols": 0}
