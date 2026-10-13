@@ -238,6 +238,8 @@ def build(page: tk.Frame, app) -> None:
     mrow = tk.Frame(map_box, bg=T.C_CARD)
     mrow.pack(fill=tk.X, pady=(T.S_SM, 0))
     secondary_button(mrow, "📥 从 Excel 导入", command=lambda: _import_map()).pack(side=tk.LEFT)
+    secondary_button(mrow, "🔍 一键提取文件名", command=lambda: _extract_names()).pack(side=tk.LEFT, padx=(T.S_XS, 0))
+    secondary_button(mrow, "💾 导出 Excel", command=lambda: _export_map()).pack(side=tk.LEFT, padx=(T.S_XS, 0))
     map_label = hint_label(mrow, "尚未导入对照表")
     map_label.pack(side=tk.LEFT, padx=T.S_SM)
 
@@ -274,6 +276,43 @@ def build(page: tk.Frame, app) -> None:
             map_tree.insert("", "end", values=(k, v))
         map_label.config(text=f"已导入 {len(mapping)} 条对照（{Path(path).name}）")
         app.set_status(f"对照表已导入 {len(mapping)} 条", "ok")
+
+    def _extract_names() -> None:
+        """一键把当前文件列表的文件名填进对照表（新文件名留空，用户再编辑）。"""
+        if not st["files"]:
+            messagebox.showwarning("缺少文件", "请先在上方选择文件夹或添加文件。")
+            return
+        st["mapping"].clear()
+        map_tree.delete(*map_tree.get_children())
+        for p in st["files"]:
+            st["mapping"][p.name] = ""     # 新文件名留空
+            map_tree.insert("", "end", values=(p.name, ""))
+        map_label.config(text=f"已提取 {len(st['files'])} 个文件名（新文件名待填写）")
+        app.set_status(f"已提取 {len(st['files'])} 个文件名到对照表", "ok")
+
+    def _export_map() -> None:
+        """把当前对照表导出成 xlsx，供用户在 Excel 里二次编辑后再导入。"""
+        if not st["mapping"]:
+            messagebox.showwarning("对照表为空", "请先「从 Excel 导入」或「一键提取文件名」。")
+            return
+        path = filedialog.asksaveasfilename(
+            title="导出对照表", defaultextension=".xlsx",
+            initialfile="对照表.xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")])
+        if not path:
+            return
+        try:
+            n = mapper.export_mapping(st["mapping"], path)
+        except Exception as exc:                       # noqa: BLE001
+            messagebox.showerror("导出失败", f"Excel 写入失败：{exc}")
+            return
+        map_label.config(text=f"已导出 {n} 条对照 → {Path(path).name}")
+        app.set_status(f"对照表已导出：{path}", "ok")
+        if messagebox.askyesno("导出成功",
+                               f"已导出 {n} 条对照到：\n{path}\n\n"
+                               "是否现在打开所在文件夹？"):
+            import os
+            os.startfile(str(Path(path).parent))
 
     def _sync_mode() -> None:
         if st["mode"].get() == "map":

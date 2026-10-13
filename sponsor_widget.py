@@ -171,11 +171,15 @@ def show_sponsor_button(parent: tk.Misc, **btn_kwargs) -> tk.Button:
     return btn
 
 
-# ============ 自测：直接 python sponsor_widget.py 可预览 ============
+# ============ 自测：直接 python sponsor_widget.py 自动弹赞助窗 ============
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("sponsor_widget 预览")
     root.geometry("400x300")
     root.configure(bg=BG)
-    show_sponsor_button(root).pack(pady=40)
+    tk.Label(root, text="点下面按钮预览赞助弹窗", font=(FONT_FAMILY, 11),
+             bg=BG, fg=TEXT_SUB).pack(pady=(40, 10))
+    show_sponsor_button(root).pack()
+    # 启动后 0.3 秒自动弹一次，方便双击运行直接看效果
+    root.after(300, lambda: show_sponsor_dialog(root))
     root.mainloop()

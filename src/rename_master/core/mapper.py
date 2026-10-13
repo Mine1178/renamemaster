@@ -125,3 +125,60 @@ def mapping_rows(mapping: Dict[str, str]) -> List[Tuple[str, str]]:
 def rows_to_mapping(rows: Sequence[Sequence]) -> Dict[str, str]:
     """界面手填的两列 → dict（与 load_mapping 同等校验口径）。"""
     return _rows_to_mapping([list(r) for r in rows])
+
+
+def export_template(files: Sequence[os.PathLike | str], out_path: os.PathLike | str) -> int:
+    """把当前文件列表导出成 Excel 模板：第1列原文件名（已填），第2列新文件名（空）。
+
+    返回写入的行数（不含表头）。
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "对照表"
+    # 表头
+    ws.append(["原文件名", "新文件名"])
+    head_font = Font(bold=True, color="FFFFFF")
+    head_fill = PatternFill("solid", fgColor="1F4E79")
+    for cell in ws[1]:
+        cell.font = head_font
+        cell.fill = head_fill
+    # 数据行
+    n = 0
+    for f in files:
+        name = Path(f).name
+        ws.append([name, ""])
+        n += 1
+    # 列宽
+    ws.column_dimensions["A"].width = 40
+    ws.column_dimensions["B"].width = 40
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    wb.save(str(out_path))
+    return n
+
+
+def export_mapping(mapping: Dict[str, str], out_path: os.PathLike | str) -> int:
+    """把当前对照表 dict 导出成 Excel（供二次编辑后再导入）。"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "对照表"
+    ws.append(["原文件名", "新文件名"])
+    head_font = Font(bold=True, color="FFFFFF")
+    head_fill = PatternFill("solid", fgColor="1F4E79")
+    for cell in ws[1]:
+        cell.font = head_font
+        cell.fill = head_fill
+    n = 0
+    for k, v in mapping.items():
+        ws.append([str(k), str(v)])
+        n += 1
+    ws.column_dimensions["A"].width = 40
+    ws.column_dimensions["B"].width = 40
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    wb.save(str(out_path))
+    return n

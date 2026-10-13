@@ -9,13 +9,14 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import renamer, scanner
+from rename_master.core import mapper, renamer, scanner
 from rename_master.ui import theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree)
 
 FILETYPES = [("表格文件", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
+MAP_FILETYPES = [("对照表", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
 FILE_COLS = [("name", "文件名", 360, "w"), ("size", "大小", 90, tk.CENTER)]
 PREVIEW_COLS = [("old", "原文件名", 260, "w"), ("new", "新文件名", 260, "w"),
                 ("size", "大小", 90, tk.CENTER), ("status", "状态", 80, tk.CENTER)]
@@ -37,6 +38,8 @@ def build(page: tk.Frame, app) -> None:
     st = {
         "files": [],
         "src_dir": tk.StringVar(value=""),   # 源目录（浏览 / 拖入共用）
+        "mode": tk.StringVar(value="prefix"),
+        "mapping": {},
         "base": tk.StringVar(value=app.cfg.get("sheet.base_name", "台账")),
         "digits": tk.StringVar(value=str(app.cfg.get("sheet.digits", 3))),
         "start": tk.StringVar(value=str(app.cfg.get("sheet.start", 1))),
@@ -127,11 +130,29 @@ def build(page: tk.Frame, app) -> None:
         app.set_status("已清空文件列表")
 
     # ---------- ② 命名规则 ----------
-    card2 = Card(page, "② 命名规则", "统一前缀 + 序号，可设位数 / 起始号 / 分隔符",
+    card2 = Card(page, "② 命名规则", "统一前缀 + 序号，或按 Excel 对照表一一改名",
                  accent=T.C_ACCENT)
     card2.pack(fill=tk.X, pady=(0, T.S_MD))
-    row = tk.Frame(card2.body, bg=T.C_CARD)
-    row.pack(fill=tk.X)
+
+    mode_row = tk.Frame(card2.body, bg=T.C_CARD)
+    mode_row.pack(fill=tk.X)
+    tk.Radiobutton(mode_row, text="模式一：统一前缀+序号", variable=st["mode"],
+                   value="prefix", command=lambda: _sync_mode(),
+                   bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
+                   activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
+                   highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
+                   anchor="w", cursor="hand2").pack(side=tk.LEFT)
+    tk.Radiobutton(mode_row, text="模式二：一一对照（Excel）", variable=st["mode"],
+                   value="map", command=lambda: _sync_mode(),
+                   bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
+                   activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
+                   highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
+                   anchor="w", cursor="hand2").pack(side=tk.LEFT, padx=T.S_MD)
+
+    # 模式一控件
+    prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
+    row = tk.Frame(prefix_box, bg=T.C_CARD)
+    row.pack(fill=tk.X, pady=(T.S_SM, 0))
     tk.Label(row, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.Entry(row, textvariable=st["base"], width=22, relief=tk.FLAT, bg=T.C_CARD,
@@ -144,12 +165,91 @@ def build(page: tk.Frame, app) -> None:
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.Spinbox(row, from_=0, to=99999, textvariable=st["start"],
                width=6).pack(side=tk.LEFT, padx=(T.S_SM, 0))
-    row2 = tk.Frame(card2.body, bg=T.C_CARD)
+    row2 = tk.Frame(prefix_box, bg=T.C_CARD)
     row2.pack(fill=tk.X, pady=(T.S_SM, 0))
     tk.Label(row2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.OptionMenu(row2, st["sep"], "_", "-", " ", "").pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
     _check(row2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
+
+    # 模式二控件
+    map_box = tk.Frame(card2.body, bg=T.C_CARD)
+    mrow = tk.Frame(map_box, bg=T.C_CARD)
+    mrow.pack(fill=tk.X, pady=(T.S_SM, 0))
+    secondary_button(mrow, "📥 从 Excel 导入", command=lambda: _import_map()).pack(side=tk.LEFT)
+    secondary_button(mrow, "🔍 一键提取文件名", command=lambda: _extract_names()).pack(side=tk.LEFT, padx=(T.S_XS, 0))
+    secondary_button(mrow, "💾 导出 Excel", command=lambda: _export_map()).pack(side=tk.LEFT, padx=(T.S_XS, 0))
+    map_label = hint_label(mrow, "尚未导入对照表")
+    map_label.pack(side=tk.LEFT, padx=T.S_SM)
+    map_tree = styled_tree(map_box, [("src", "原文件名", 180, "w"),
+                                     ("dst", "新文件名", 180, "w")], height=5)
+    map_tree.pack(fill=tk.X, pady=(T.S_SM, 0))
+    hint_label(map_box,
+               "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。"
+               ).config(wraplength=500).pack(fill=tk.X)
+
+    def _import_map() -> None:
+        path = filedialog.askopenfilename(title="选择对照表", filetypes=MAP_FILETYPES)
+        if not path:
+            return
+        try:
+            mapping = mapper.load_mapping(path)
+        except Exception as exc:                       # noqa: BLE001
+            messagebox.showerror("导入失败", f"对照表解析失败：{exc}")
+            return
+        if not mapping:
+            messagebox.showwarning("导入结果", "对照表为空，请检查列内容。")
+            return
+        st["mapping"].clear()
+        st["mapping"].update(mapping)
+        map_tree.delete(*map_tree.get_children())
+        for k, v in mapper.mapping_rows(mapping):
+            map_tree.insert("", "end", values=(k, v))
+        map_label.config(text=f"已导入 {len(mapping)} 条对照（{Path(path).name}）")
+        app.set_status(f"对照表已导入 {len(mapping)} 条", "ok")
+
+    def _extract_names() -> None:
+        if not st["files"]:
+            messagebox.showwarning("缺少文件", "请先在上方选择文件夹或添加文件。")
+            return
+        st["mapping"].clear()
+        map_tree.delete(*map_tree.get_children())
+        for p in st["files"]:
+            st["mapping"][p.name] = ""
+            map_tree.insert("", "end", values=(p.name, ""))
+        map_label.config(text=f"已提取 {len(st['files'])} 个文件名（新文件名待填写）")
+        app.set_status(f"已提取 {len(st['files'])} 个文件名到对照表", "ok")
+
+    def _export_map() -> None:
+        if not st["mapping"]:
+            messagebox.showwarning("对照表为空", "请先「从 Excel 导入」或「一键提取文件名」。")
+            return
+        path = filedialog.asksaveasfilename(
+            title="导出对照表", defaultextension=".xlsx",
+            initialfile="对照表.xlsx",
+            filetypes=[("Excel 文件", "*.xlsx")])
+        if not path:
+            return
+        try:
+            n = mapper.export_mapping(st["mapping"], path)
+        except Exception as exc:                       # noqa: BLE001
+            messagebox.showerror("导出失败", f"Excel 写入失败：{exc}")
+            return
+        map_label.config(text=f"已导出 {n} 条对照 → {Path(path).name}")
+        app.set_status(f"对照表已导出：{path}", "ok")
+        if messagebox.askyesno("导出成功",
+                               f"已导出 {n} 条对照到：\n{path}\n\n"
+                               "是否现在打开所在文件夹？"):
+            import os
+            os.startfile(str(Path(path).parent))
+
+    def _sync_mode() -> None:
+        if st["mode"].get() == "map":
+            map_box.pack(fill=tk.X)
+            prefix_box.pack_forget()
+        else:
+            prefix_box.pack(fill=tk.X)
+            map_box.pack_forget()
 
     # ---------- ③ 输出位置 ----------
     card3 = Card(page, "③ 输出位置", "输出到独立目录，源文件零改动", accent=T.C_SUCCESS)
@@ -170,6 +270,9 @@ def build(page: tk.Frame, app) -> None:
 
     # ---------- 规则 / 预览 / 执行 ----------
     def _rule() -> dict:
+        if st["mode"].get() == "map":
+            return {"mapping": dict(st["mapping"]),
+                    "keep_ext": st["keep_ext"].get()}
         try:
             start = int(str(st["start"].get()).strip())
         except ValueError:
@@ -183,7 +286,8 @@ def build(page: tk.Frame, app) -> None:
                 "keep_ext": st["keep_ext"].get()}
 
     def _make_plans():
-        return renamer.plan_rename(st["files"], renamer.MODE_PREFIX, _rule())
+        mode = renamer.MODE_MAP if st["mode"].get() == "map" else renamer.MODE_PREFIX
+        return renamer.plan_rename(st["files"], mode, _rule())
 
     def _validate() -> bool:
         if not st["files"]:
@@ -191,6 +295,9 @@ def build(page: tk.Frame, app) -> None:
             return False
         if not st["out_dir"].get().strip():
             messagebox.showwarning("缺少输出目录", "请选择输出目录。")
+            return False
+        if st["mode"].get() == "map" and not st["mapping"]:
+            messagebox.showwarning("缺少对照表", "模式二需要先导入 Excel 对照表或一键提取文件名。")
             return False
         return True
 
@@ -319,5 +426,6 @@ def build(page: tk.Frame, app) -> None:
 
     page.bind("<Map>", _activate)
     _activate()
+    _sync_mode()
     _refresh_tree()
     app.set_status("就绪")
