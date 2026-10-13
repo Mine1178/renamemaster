@@ -1,12 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('D:/Desktop/SD/13.Rename/assets', 'assets')]
+binaries = []
+hiddenimports = ['PIL', 'openpyxl', 'docx', 'pypdf', 'numpy', 'cv2', 'pywt', 'blind_watermark']
+tmp_ret = collect_all('blind_watermark')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
     ['D:/Desktop/SD/13.Rename/src/rename_master/main.py'],
     pathex=['D:/Desktop/SD/13.Rename/src'],
-    binaries=[],
-    datas=[('D:/Desktop/SD/13.Rename/assets', 'assets')],
-    hiddenimports=['PIL', 'openpyxl', 'docx', 'pypdf'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
