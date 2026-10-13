@@ -20,6 +20,7 @@ MAX_BATCHES = 30
 # 页面 key → 中文名（弹窗展示用）
 PAGE_NAMES = {
     "photo": "照片命名",
+    "watermark": "水印",
     "pdf": "PDF 命名",
     "spreadsheet": "表格命名",
     "document": "文档命名",

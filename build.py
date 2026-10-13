@@ -21,7 +21,10 @@ WORK = ROOT / "build"
 ERROR_LOG = ROOT / "inbox" / "build_error.txt"
 
 NAME = "RenameMaster"
-HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf"]
+HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf", "numpy", "cv2", "pywt",
+                  "blind_watermark"]
+# 整个包收集（含子模块 / 数据文件），避免动态导入漏掉
+COLLECT_ALL = ["blind_watermark"]
 
 
 def _ensure_pyinstaller() -> None:
@@ -53,6 +56,8 @@ def _build_cmd() -> list[str]:
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
+    for pkg in COLLECT_ALL:
+        cmd += ["--collect-all", pkg]
     assets = ROOT / "assets"
     if assets.is_dir():
         cmd += ["--add-data", f"{assets};assets"]

@@ -93,6 +93,32 @@ def _fill(color: str, opacity: float) -> tuple:
     return (*rgb, int(round(255 * ratio)))
 
 
+def _parse_color(color) -> tuple:
+    """颜色名 / #RRGGBB / (r,g,b) → RGB；非法值回退默认白。"""
+    if isinstance(color, (tuple, list)) and len(color) >= 3:
+        return tuple(int(c) for c in color[:3])
+    key = str(color).strip().lstrip("#")
+    if str(color).lower() in COLORS:
+        return COLORS[str(color).lower()]
+    if len(key) == 6:
+        try:
+            return tuple(int(key[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            pass
+    logger.warning("无法解析水印颜色 %r，回退 %s", color, DEFAULT_COLOR)
+    return COLORS[DEFAULT_COLOR]
+
+
+def _with_alpha(rgb: tuple, opacity: float) -> tuple:
+    """RGB + 不透明度 → RGBA（兼容旧 _fill 的范围校验）。"""
+    try:
+        ratio = min(1.0, max(0.0, float(opacity)))
+    except (TypeError, ValueError):
+        logger.warning("非法不透明度 %r，回退 %s", opacity, DEFAULT_OPACITY)
+        ratio = DEFAULT_OPACITY
+    return (*rgb, int(round(255 * ratio)))
+
+
 def _h_align(position: str) -> str:
     """position 的水平分量：left / right / center。"""
     if position.endswith("left"):
@@ -158,7 +184,7 @@ def add_watermark(img_bytes: bytes, text: str, position: str = DEFAULT_POSITION,
     margin = font_size
     gap = max(0, int(font_size * LINE_GAP_RATIO))
     font = _load_font(font_size)
-    fill = _fill(color, opacity)
+    fill = _with_alpha(_parse_color(color), opacity)
 
     overlay = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -184,6 +210,7 @@ def add_watermark(img_bytes: bytes, text: str, position: str = DEFAULT_POSITION,
             line_x = x + (block_w - line_w) / 2
         draw.text((line_x, cursor - box[1]), line, font=font, fill=fill)
         cursor += line_h + gap
+
 
     return _to_jpeg(Image.alpha_composite(rgba, overlay))
 
@@ -223,6 +250,82 @@ def add_logo_watermark(img_bytes: bytes, logo_path, position: str = DEFAULT_LOGO
     overlay = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
     overlay.paste(logo, (x, y), logo)           # 第 3 个参数即 alpha 蒙版
     return _to_jpeg(Image.alpha_composite(rgba, overlay))
+
+
+def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
+                       font_size_ratio: float = 0.02, color="white",
+                       opacity: float = 0.3, spacing: float = 1.0,
+                       stroke: int = 0, shadow: bool = False) -> bytes:
+    """斜向平铺旋转文字水印：铺满全图，裁掉一块仍有残留（防盗核心）。
+
+    angle：旋转角度（默认 30°）；spacing：水印间距倍数（小=密，大=疏）；
+    stroke：非 0 时给文字加深色描边；shadow：投影，复杂背景上更清晰。
+    """
+    from PIL import Image, ImageDraw
+
+    if not text or not str(text).strip():
+        return img_bytes
+
+    rgba = _base_rgba(img_bytes)
+    width, height = rgba.size
+    font_size = max(1, int(min(width, height) * float(font_size_ratio)))
+    font = _load_font(font_size)
+    fill = _with_alpha(_parse_color(color), opacity)
+
+    # 工作画布边长取对角线 + 余量：旋转后中心 W×H 必被覆盖，不留空角
+    diag = int((width ** 2 + height ** 2) ** 0.5) + font_size * 4
+    tile = Image.new("RGBA", (diag, diag), (0, 0, 0, 0))
+    td = ImageDraw.Draw(tile)
+    bbox = td.textbbox((0, 0), str(text), font=font)
+    tw = max(1, bbox[2] - bbox[0])
+    th = max(1, bbox[3] - bbox[1])
+    sx = int((tw + font_size * 2) * float(spacing))
+    sy = int((th + font_size * 3) * float(spacing))
+    stroke_w = max(1, int(font_size * 0.07)) if stroke else 0
+    stroke_fill = (0, 0, 0, min(255, fill[3] + 90)) if stroke else None
+
+    for row, y in enumerate(range(-diag, diag * 2, sy)):
+        offset = sx // 2 if row % 2 else 0          # 奇偶行交错，更难裁
+        for x in range(-diag, diag * 2, sx):
+            if shadow:
+                td.text((x - offset + 2, y - bbox[1] + 2), str(text),
+                        font=font, fill=(0, 0, 0, fill[3] // 2))
+            td.text((x - offset, y - bbox[1]), str(text), font=font,
+                    fill=fill, stroke_width=stroke_w, stroke_fill=stroke_fill)
+
+    rot = tile.rotate(angle, resample=Image.BICUBIC, expand=False)
+    left, top = (diag - width) // 2, (diag - height) // 2
+    overlay = rot.crop((left, top, left + width, top + height))
+    return _to_jpeg(Image.alpha_composite(rgba, overlay))
+
+
+def apply_watermark(img_bytes: bytes, *, text: str = "", layout: str = "single",
+                    position: str = "bottom_right", angle: float = 30,
+                    font_size_ratio: float = 0.02, color="white",
+                    opacity: float = 0.4, spacing: float = 1.0,
+                    stroke: int = 0, shadow: bool = False,
+                    logo_path: str = "", logo_position: str = "top_left",
+                    logo_ratio: float = 0.08) -> bytes:
+    """统一水印入口（新页面调用）。
+
+    layout：single=按 position 角落单处；tile=斜向平铺（angle/spacing）。
+    文字与 LOGO 可叠加；无任何水印内容时原样返回。
+    """
+    data = img_bytes
+    if text and str(text).strip():
+        if layout == "tile":
+            data = add_tile_watermark(
+                data, text, angle=angle, font_size_ratio=font_size_ratio,
+                color=color, opacity=opacity, spacing=spacing,
+                stroke=stroke, shadow=shadow)
+        else:
+            data = add_watermark(
+                data, text, position=position,
+                font_size_ratio=font_size_ratio, color=color, opacity=opacity)
+    if logo_path and str(logo_path).strip():
+        data = add_logo_watermark(data, logo_path, position=logo_position,
+                                  logo_ratio=logo_ratio)
+    return data
 
 
 def render_template(template_name: str, **kwargs) -> str:

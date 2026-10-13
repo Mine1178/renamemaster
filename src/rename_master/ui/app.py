@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "RenameMaster"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.1"
+VERSION = "1.2"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = 10
@@ -28,6 +28,7 @@ _NAV_FONT_SIZE = 10
 NAV_ITEMS = [
     ("home", "🏠", "首页"),
     ("photo", "📷", "照片命名"),
+    ("watermark", "💧", "水印"),
     ("pdf", "📄", "PDF 命名"),
     ("spreadsheet", "📊", "表格命名"),
     ("document", "📄", "文档命名"),
@@ -135,6 +136,7 @@ class App:
         self._page_builders = {
             "home": self._build_home,
             "photo": self._build_photo,
+            "watermark": self._build_watermark,
             "pdf": self._build_pdf,
             "spreadsheet": self._build_spreadsheet,
             "document": self._build_document,
@@ -392,6 +394,13 @@ class App:
         f = self._page()
         self.pages["photo"] = f
         from rename_master.ui.pages.photo import build
+        build(f, self)
+        self._mount_action_bar()
+
+    def _build_watermark(self) -> None:
+        f = self._page()
+        self.pages["watermark"] = f
+        from rename_master.ui.pages.watermark import build
         build(f, self)
         self._mount_action_bar()
 

@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from rename_master.core import (compressor, history, mapper, renamer, scanner,
-                               watermark)
+from rename_master.core import (compressor, history, mapper, renamer, scanner)
 from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
@@ -27,39 +25,6 @@ TARGET_OPTIONS = [
     ("100 KB", "100"),
     ("自定义", "custom"),
 ]
-
-WM_PLACEHOLDER = "如：曲靖联通 2026-10-12（回车换行可多行）"
-WM_TEXT_ROWS = 3                                     # 多行输入框高度（行）
-# (下拉显示文案, 传给 watermark.add_watermark 的 position)：与 watermark.POSITIONS 对齐
-WM_POSITIONS = [("右下角", "bottom_right"), ("左下角", "bottom_left"),
-                ("右上角", "top_right"), ("左上角", "top_left"),
-                ("底部居中", "bottom_center"), ("顶部居中", "top_center"),
-                ("左中", "center_left"), ("右中", "center_right"),
-                ("居中", "center")]
-WM_POS_VALUE = dict(WM_POSITIONS)
-# (下拉显示文案, color)：对应 watermark.COLORS
-WM_COLORS = [("白色", "white"), ("黑色", "black"), ("黄色", "yellow"),
-             ("红色", "red"), ("青色", "cyan")]
-WM_COLOR_VALUE = dict(WM_COLORS)
-WM_COLOR_DEFAULT = "白色"
-# (下拉显示文案, opacity)
-WM_OPACITIES = [("10%", 0.1), ("20%", 0.2), ("40%", 0.4), ("60%", 0.6),
-                ("80%", 0.8)]
-WM_OPACITY_VALUE = dict(WM_OPACITIES)
-WM_OPACITY_DEFAULT = "40%"
-# (下拉显示文案, watermark.TEMPLATES 的 key)：none = 不自动填
-WM_TEMPLATES = [("不使用模板", "none"), ("运营商巡检", "operator"),
-                ("现场勘查", "survey")]
-WM_TEMPLATE_DEFAULT = "不使用模板"
-WM_TEMPLATE_LOCATION = "曲靖市"
-WM_LOGO_FILETYPES = [("LOGO 图片", "*.png *.jpg *.jpeg *.bmp"),
-                     ("所有文件", "*.*")]
-WM_LOGO_POSITION = "top_left"                        # LOGO 固定贴左上角
-# (下拉显示文案, font_size_ratio)：字号 = 图片短边 × 比例
-WM_SIZE_OPTIONS = [("小", 0.012), ("中", 0.020), ("大", 0.035)]
-WM_SIZE_VALUE = dict(WM_SIZE_OPTIONS)
-WM_SIZE_DEFAULT = "中"
-WM_RATIO_DEFAULT = WM_SIZE_VALUE[WM_SIZE_DEFAULT]
 
 FILE_COLS = [("sel", "☑", 40, tk.CENTER), ("name", "文件名", 280, "w"),
              ("size", "大小", 90, tk.CENTER), ("dim", "尺寸", 120, tk.CENTER)]
@@ -109,16 +74,6 @@ def build(page: tk.Frame, app) -> None:
         "target": tk.StringVar(value=app.cfg.get("photo.compress", "500")),
         "custom_kb": tk.StringVar(value=str(app.cfg.get("photo.custom_kb", 300))),
         "keep_exif": tk.BooleanVar(value=bool(app.cfg.get("photo.keep_exif", True))),
-        "wm_on": tk.BooleanVar(value=bool(app.cfg.get("photo.wm_on", False))),
-        "wm_text": tk.StringVar(value=str(app.cfg.get("photo.wm_text", ""))),
-        "wm_pos": tk.StringVar(value=app.cfg.get("photo.wm_pos", "右下角")),
-        "wm_size": tk.StringVar(value=app.cfg.get("photo.wm_size", WM_SIZE_DEFAULT)),
-        "wm_color": tk.StringVar(value=app.cfg.get("photo.wm_color", WM_COLOR_DEFAULT)),
-        "wm_opacity": tk.StringVar(
-            value=app.cfg.get("photo.wm_opacity", WM_OPACITY_DEFAULT)),
-        "wm_template": tk.StringVar(
-            value=app.cfg.get("photo.wm_template", WM_TEMPLATE_DEFAULT)),
-        "wm_logo": tk.StringVar(value=str(app.cfg.get("photo.wm_logo", ""))),
         "out_dir": tk.StringVar(value=""),
         "src_dir": tk.StringVar(value=""),   # 源文件夹（点「添加文件夹」或拖入时记录）
         "cancel": None,       # threading.Event，执行中非 None
@@ -386,140 +341,6 @@ def build(page: tk.Frame, app) -> None:
     def _sync_target() -> None:
         pass  # 自定义 Entry 常显，取值时再判断；保留钩子便于后续禁用态扩展
 
-    # ---------- ④ 水印（可选，默认关闭 + 默认折叠） ----------
-    card_wm = Card(page, "④ 水印（可选）",
-                   "默认关闭并折叠；勾选后可叠加多行文字水印（颜色 / 透明度 / 9 种位置）"
-                   "，还能再贴一张 LOGO",
-                   accent=T.C_WARNING, collapsible=True, start_collapsed=True)
-    card_wm.pack(fill=tk.X, pady=(0, T.S_MD))
-
-    # 第一行：开关 + 快速模板
-    r1 = tk.Frame(card_wm.body, bg=T.C_CARD)
-    r1.pack(fill=tk.X)
-    _check(r1, "☑ 添加水印文字", st["wm_on"],
-           command=lambda: _sync_watermark()).pack(side=tk.LEFT)
-    wm_tpl_label = vlabel(r1, text="📋 快速模板", font=(T.FONT_FAMILY, T.F_BODY),
-                            bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_tpl_label.pack(side=tk.LEFT, padx=(T.S_LG, 0))
-    wm_tpl_menu = tk.OptionMenu(r1, st["wm_template"], *[d for d, _ in WM_TEMPLATES],
-                                command=lambda _v: _apply_template())
-    wm_tpl_menu.config(width=10)
-    wm_tpl_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-
-    # 第二行：多行水印文字
-    r2 = tk.Frame(card_wm.body, bg=T.C_CARD)
-    r2.pack(fill=tk.X, pady=(T.S_SM, 0))
-    wm_text_label = vlabel(r2, text="水印文字", font=(T.FONT_FAMILY, T.F_BODY),
-                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_text_label.pack(side=tk.LEFT, anchor="n")
-    wm_text_box = tk.Text(r2, height=WM_TEXT_ROWS, wrap=tk.WORD, relief=tk.FLAT,
-                          bg=T.C_CARD, fg=T.C_TEXT_FADE,
-                          highlightbackground=T.C_BORDER, highlightthickness=1,
-                          font=(T.FONT_FAMILY, T.F_BODY))
-    wm_text_box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(T.S_SM, 0))
-    _hl = hint_label(r2, "回车换行可写多行")
-    _hl.pack(side=tk.LEFT, padx=(T.S_SM, 0), anchor="n")
-
-    # 第三行：颜色 / 透明度 / 位置 / 字号
-    r3 = tk.Frame(card_wm.body, bg=T.C_CARD)
-    r3.pack(fill=tk.X, pady=(T.S_SM, 0))
-    wm_color_label = vlabel(r3, text="颜色", font=(T.FONT_FAMILY, T.F_BODY),
-                              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_color_label.pack(side=tk.LEFT)
-    wm_color_menu = tk.OptionMenu(r3, st["wm_color"], *[d for d, _ in WM_COLORS])
-    wm_color_menu.config(width=5)
-    wm_color_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_opacity_label = vlabel(r3, text="透明度", font=(T.FONT_FAMILY, T.F_BODY),
-                                bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_opacity_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
-    wm_opacity_menu = tk.OptionMenu(r3, st["wm_opacity"], *[d for d, _ in WM_OPACITIES])
-    wm_opacity_menu.config(width=4)
-    wm_opacity_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_pos_label = vlabel(r3, text="位置", font=(T.FONT_FAMILY, T.F_BODY),
-                            bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_pos_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
-    wm_pos_menu = tk.OptionMenu(r3, st["wm_pos"], *[d for d, _ in WM_POSITIONS])
-    wm_pos_menu.config(width=8)
-    wm_pos_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_size_label = vlabel(r3, text="字号", font=(T.FONT_FAMILY, T.F_BODY),
-                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
-    wm_size_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
-    wm_size_menu = tk.OptionMenu(r3, st["wm_size"], *[d for d, _ in WM_SIZE_OPTIONS])
-    wm_size_menu.config(width=3)
-    wm_size_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-
-    # 第四行：LOGO
-    r4 = tk.Frame(card_wm.body, bg=T.C_CARD)
-    r4.pack(fill=tk.X, pady=(T.S_SM, 0))
-    wm_logo_btn = secondary_button(r4, "🖼 选择 LOGO 图片",
-                                   command=lambda: _pick_logo())
-    wm_logo_btn.pack(side=tk.LEFT)
-    wm_logo_label = hint_label(r4, "未选择 LOGO")
-    wm_logo_label.pack(side=tk.LEFT, padx=T.S_SM)
-
-    def _wm_raw() -> str:
-        return wm_text_box.get("1.0", "end-1c")
-
-    def _wm_set_text(value: str) -> None:
-        wm_text_box.delete("1.0", tk.END)
-        wm_text_box.insert("1.0", value)
-        wm_text_box.config(fg=T.C_TEXT if value.strip() else T.C_TEXT_FADE)
-
-    def _apply_template() -> None:
-        """选模板 → 用当前日期时间渲染文案并填进多行框。"""
-        name = dict(WM_TEMPLATES).get(st["wm_template"].get(), "none")
-        if name == "none":
-            return
-        text = watermark.render_template(
-            name, date=datetime.now().strftime("%Y-%m-%d %H:%M"),
-            location=WM_TEMPLATE_LOCATION)
-        _wm_set_text(text)
-        app.set_status(f"已填入「{st['wm_template'].get()}」模板文案", "ok")
-
-    def _pick_logo() -> None:
-        path = filedialog.askopenfilename(title="选择 LOGO 图片",
-                                          filetypes=WM_LOGO_FILETYPES)
-        if path:
-            st["wm_logo"].set(path)
-            wm_logo_label.config(text=f"LOGO：{path}")
-            app.set_status(f"已选择 LOGO：{path}", "ok")
-
-    def _wm_focus_in(_event=None) -> None:
-        if _wm_raw() == WM_PLACEHOLDER:
-            wm_text_box.delete("1.0", tk.END)
-        wm_text_box.config(fg=T.C_TEXT)
-
-    def _wm_focus_out(_event=None) -> None:
-        if not _wm_raw().strip():
-            _wm_set_text(WM_PLACEHOLDER)
-
-    wm_text_box.bind("<FocusIn>", _wm_focus_in)
-    wm_text_box.bind("<FocusOut>", _wm_focus_out)
-    if st["wm_text"].get().strip():
-        _wm_set_text(st["wm_text"].get())       # 读上次配置
-    else:
-        _wm_focus_out()                        # 初始显示 placeholder
-    if st["wm_logo"].get().strip():
-        wm_logo_label.config(text=f"LOGO：{st['wm_logo'].get()}")
-
-    def _wm_text_value() -> str:
-        raw = _wm_raw().strip()
-        return "" if raw == WM_PLACEHOLDER else raw
-
-    def _sync_watermark() -> None:
-        on = st["wm_on"].get()
-        state = tk.NORMAL if on else tk.DISABLED
-        wm_text_box.config(state=state)
-        for menu in (wm_tpl_menu, wm_color_menu, wm_opacity_menu, wm_pos_menu,
-                     wm_size_menu):
-            menu.config(state=state)
-        wm_logo_btn.config(state=state)
-        fg = T.C_TEXT_M if on else T.C_TEXT_FADE
-        for label in (wm_tpl_label, wm_text_label, wm_color_label,
-                      wm_opacity_label, wm_pos_label, wm_size_label):
-            label.config(fg=fg)
-        wm_logo_label.config(fg=fg)
-
     advanced.build_card(page, app, st["adv"])
 
     # ---------- ⑤ 输出位置 ----------
@@ -573,32 +394,16 @@ def build(page: tk.Frame, app) -> None:
         return renamer.plan_rename(st["files"], mode, _build_rule())
 
     def _transform(target_kb: int):
-        # 水印是最后一步：先压缩到目标大小，再叠水印（避免水印被二次压缩糊掉）
-        wm_text = _wm_text_value() if st["wm_on"].get() else ""
-        wm_pos = WM_POS_VALUE.get(st["wm_pos"].get(), watermark.DEFAULT_POSITION)
-        wm_ratio = WM_SIZE_VALUE.get(st["wm_size"].get(), WM_RATIO_DEFAULT)
-        wm_color = WM_COLOR_VALUE.get(st["wm_color"].get(), watermark.DEFAULT_COLOR)
-        wm_opacity = WM_OPACITY_VALUE.get(st["wm_opacity"].get(),
-                                          watermark.DEFAULT_OPACITY)
-        wm_logo = st["wm_logo"].get().strip() if st["wm_on"].get() else ""
-        if target_kb <= 0 and not wm_text and not wm_logo:
+        """照片页只做压缩（水印已独立到「水印」页）。target_kb<=0 不做变换。"""
+        if target_kb <= 0:
             return None
 
         def _fn(src: Path, dst_name: str):
             if Path(src).suffix.lower() not in scanner.IMAGE_EXTS:
                 return None
             data = Path(src).read_bytes()
-            if target_kb > 0:
-                data = compressor.compress_to_target(data, target_kb,
-                                                     keep_exif=st["keep_exif"].get())
-            if wm_text:
-                data = watermark.add_watermark(data, wm_text, position=wm_pos,
-                                               font_size_ratio=wm_ratio,
-                                               color=wm_color, opacity=wm_opacity)
-            if wm_logo:
-                data = watermark.add_logo_watermark(data, wm_logo,
-                                                    position=WM_LOGO_POSITION)
-            return data
+            return compressor.compress_to_target(data, target_kb,
+                                                 keep_exif=st["keep_exif"].get())
         return _fn
 
     def _validate() -> bool:
@@ -766,6 +571,5 @@ def build(page: tk.Frame, app) -> None:
     page.bind("<Map>", _activate)
     _activate()
     _sync_mode()
-    _sync_watermark()
     _refresh_tree()
     app.set_status("就绪")
