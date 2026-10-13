@@ -13,17 +13,42 @@ class Card(tk.Frame):
     - 顶部色条颜色由 accent 决定（橙 C_ACCENT / 蓝 C_INFO / 绿 C_SUCCESS）；
     - desc 的 wraplength 按卡片实际宽度自适应，窄窗口不溢出；
     - hover 递归重染所有子孙，避免 body 内控件底色不一致；
-    - body 是唯一的内容挂载点，内边距统一 S_MD。
+    - body 是唯一的内容挂载点，内边距统一 S_MD；
+    - collapsible=True 时标题栏右侧出现 ▶/▼ 按钮，可折叠到只剩标题栏一行
+      （start_collapsed=True 即初始折叠）。
     """
 
     def __init__(self, master, title: str, desc: str = "", accent: str = T.C_ACCENT,
-                 on_click=None, **kw):
+                 on_click=None, collapsible: bool = False,
+                 start_collapsed: bool = False, **kw):
         super().__init__(master, bg=T.C_CARD,
                          highlightbackground=T.C_BORDER, highlightthickness=1, **kw)
         tk.Frame(self, bg=accent, height=4).pack(fill=tk.X)
-        self._title = tk.Label(self, text=title, font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
-                               bg=T.C_CARD, fg=T.C_TEXT, anchor="w", justify=tk.LEFT)
-        self._title.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(T.S_MD, T.S_XS))
+        self.collapsible = collapsible
+        self.collapsed = False
+        self.toggle_btn = None
+        if collapsible:
+            head = tk.Frame(self, bg=T.C_CARD)
+            head.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(T.S_MD, T.S_XS))
+            self._title = tk.Label(head, text=title,
+                                   font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
+                                   bg=T.C_CARD, fg=T.C_TEXT, anchor="w",
+                                   justify=tk.LEFT)
+            self._title.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.toggle_btn = tk.Button(head, text="▼", command=self.toggle,
+                                        font=(T.FONT_FAMILY, T.F_BODY),
+                                        bg=T.C_CARD, fg=T.C_TEXT_M,
+                                        activebackground=T.C_HOVER,
+                                        activeforeground=T.C_ACCENT,
+                                        bd=0, relief=tk.FLAT, width=2,
+                                        cursor="hand2")
+            self.toggle_btn.pack(side=tk.RIGHT)
+        else:
+            self._title = tk.Label(self, text=title,
+                                   font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
+                                   bg=T.C_CARD, fg=T.C_TEXT, anchor="w",
+                                   justify=tk.LEFT)
+            self._title.pack(fill=tk.X, padx=T.CARD_BODY_PAD, pady=(T.S_MD, T.S_XS))
         self._desc = None
         if desc:
             self._desc = tk.Label(self, text=desc, font=(T.FONT_FAMILY, T.F_BODY),
@@ -34,6 +59,8 @@ class Card(tk.Frame):
         body.pack(fill=tk.BOTH, expand=True,
                   padx=T.CARD_BODY_PAD, pady=(0, T.CARD_BODY_PAD))
         self.body = body
+        if collapsible and start_collapsed:
+            self.set_collapsed(True)
         if on_click:
             tk.Label(self, text="进入 →", font=(T.FONT_FAMILY, T.F_SM, "bold"),
                      bg=T.C_CARD, fg=accent).pack(anchor="e", padx=T.CARD_BODY_PAD,
@@ -43,6 +70,27 @@ class Card(tk.Frame):
             self.bind("<Leave>", lambda e: self._hover(False, accent))
             self._bind_tree(self, on_click, accent)   # 子孙也要响应，否则"挡住"父事件
         self.bind("<Configure>", self._on_resize)
+
+    # ---------- 折叠 ----------
+    def toggle(self) -> None:
+        """▶ / ▼ 切换折叠态。"""
+        self.set_collapsed(not self.collapsed)
+
+    def set_collapsed(self, on: bool) -> None:
+        """折叠 → 只留标题栏一行；展开 → 描述 + body 按原顺序恢复。"""
+        self.collapsed = bool(on)
+        if self.toggle_btn is not None:
+            self.toggle_btn.config(text="▶" if self.collapsed else "▼")
+        if self.collapsed:
+            if self._desc is not None:
+                self._desc.pack_forget()
+            self.body.pack_forget()
+        else:
+            self.body.pack(fill=tk.BOTH, expand=True,
+                           padx=T.CARD_BODY_PAD, pady=(0, T.CARD_BODY_PAD))
+            if self._desc is not None:
+                self._desc.pack(fill=tk.X, padx=T.CARD_BODY_PAD,
+                                pady=(0, T.S_SM), before=self.body)
 
     # ---------- 自适应 ----------
     def _on_resize(self, event) -> None:
