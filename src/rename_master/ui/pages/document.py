@@ -154,34 +154,40 @@ def build(page: tk.Frame, app) -> None:
                    highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
                    anchor="w", cursor="hand2").pack(side=tk.LEFT, padx=T.S_MD)
 
-    # 模式一控件
+    # 模式一控件（与照片页对齐：基础名称独占一行，其余横向排）
     prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
     _check(prefix_box, f"☑ 用正文前 {BODY_CHARS} 字作为文件名（叠加前缀）",
            st["use_content"]).pack(fill=tk.X, pady=(T.S_SM, 0))
 
-    row = tk.Frame(prefix_box, bg=T.C_CARD)
-    row.pack(fill=tk.X, pady=(T.S_SM, 0))
-    tk.Label(row, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+    prow = tk.Frame(prefix_box, bg=T.C_CARD)
+    prow.pack(fill=tk.X, pady=(T.S_SM, 0))
+    tk.Label(prow, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Entry(row, textvariable=st["base"], width=22, relief=tk.FLAT, bg=T.C_CARD,
+    tk.Entry(prow, textvariable=st["base"], relief=tk.FLAT, bg=T.C_CARD,
              fg=T.C_TEXT, highlightbackground=T.C_BORDER,
-             highlightthickness=1).pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    tk.Label(row, text="序号位数", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+             highlightthickness=1).pack(side=tk.LEFT, fill=tk.X, expand=True,
+                                        padx=(T.S_SM, 0))
+
+    prow2 = tk.Frame(prefix_box, bg=T.C_CARD)
+    prow2.pack(fill=tk.X, pady=(T.S_SM, 0))
+    tk.Label(prow2, text="位数", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.OptionMenu(row, st["digits"], "3", "4", "5").pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    tk.Label(row, text="起始序号", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+    digits_menu = tk.OptionMenu(prow2, st["digits"], "3", "4", "5")
+    digits_menu.config(width=2)
+    digits_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
+    tk.Label(prow2, text="起始", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Spinbox(row, from_=0, to=99999, textvariable=st["start"],
-               width=6).pack(side=tk.LEFT, padx=(T.S_SM, 0))
-    row2 = tk.Frame(prefix_box, bg=T.C_CARD)
-    row2.pack(fill=tk.X, pady=(T.S_SM, 0))
-    tk.Label(row2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+    tk.Spinbox(prow2, from_=0, to=99999, textvariable=st["start"],
+               width=4).pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
+    tk.Label(prow2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
              fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.OptionMenu(row2, st["sep"], "_", "-", " ", "").pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    _check(row2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
+    sep_menu = tk.OptionMenu(prow2, st["sep"], "_", "-", " ", "")
+    sep_menu.config(width=2)
+    sep_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
+    _check(prow2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
     hint_label(prefix_box, "勾选正文提取时：前缀 + 正文开头 + 序号；"
-                           "提取失败的文件自动退化为前缀 + 序号。").pack(fill=tk.X,
-                                                              pady=(T.S_XS, 0))
+                           "提取失败的文件自动退化为前缀 + 序号。示例：文档_001.docx"
+               ).pack(fill=tk.X, pady=(T.S_XS, 0))
 
     # 模式二控件
     map_box = tk.Frame(card2.body, bg=T.C_CARD)
@@ -192,8 +198,13 @@ def build(page: tk.Frame, app) -> None:
     secondary_button(mrow, "💾 导出 Excel", command=lambda: _export_map()).pack(side=tk.LEFT, padx=(T.S_XS, 0))
     map_label = hint_label(mrow, "尚未导入对照表")
     map_label.pack(side=tk.LEFT, padx=T.S_SM)
-    map_tree = styled_tree(map_box, [("src", "原文件名", 180, "w"),
-                                     ("dst", "新文件名", 180, "w")], height=5)
+    map_tree = styled_tree(map_box, [("src", "原文件名", 150, "w"),
+                                     ("dst", "新文件名", 150, "w")], height=6)
+    map_vsb = ttk.Scrollbar(map_box, orient="vertical",
+                            style="RenameMaster.Vertical.TScrollbar",
+                            command=map_tree.yview)
+    map_tree.configure(yscrollcommand=map_vsb.set)
+    map_vsb.pack(side=tk.RIGHT, fill=tk.Y)
     map_tree.pack(fill=tk.X, pady=(T.S_SM, 0))
     hint_label(map_box,
                "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。"
