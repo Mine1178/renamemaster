@@ -459,17 +459,21 @@ def build(page: tk.Frame, app) -> None:
                         data = src.read_bytes()
                         stem = src.stem
                         if embed:
-                            # 先嵌盲水印到临时 PNG（必须先做，保证水印完整）
+                            # 先嵌盲水印到临时 PNG（必须先做，保证水印完整）。
+                            # try/finally 保证坏图 / 异常时临时文件也删除，不泄漏。
                             with tempfile.NamedTemporaryFile(
                                     suffix=".png", delete=False) as tmp:
-                                blind_path = tmp.name
-                            blind_len = blind_wm.embed_watermark(
-                                src, blind_path, blind_text, password_wm=pw)
-                            data = Path(blind_path).read_bytes()
+                                blind_path = Path(tmp.name)
                             try:
-                                Path(blind_path).unlink()
-                            except OSError:
-                                pass
+                                blind_len = blind_wm.embed_watermark(
+                                    src, str(blind_path), blind_text,
+                                    password_wm=pw)
+                                data = blind_path.read_bytes()
+                            finally:
+                                try:
+                                    blind_path.unlink()
+                                except OSError:
+                                    pass
                             if vis:
                                 data = watermark.apply_watermark(data, **vis_kwargs)
                                 out_name = stem + ".jpg"
@@ -479,9 +483,10 @@ def build(page: tk.Frame, app) -> None:
                             data = watermark.apply_watermark(data, **vis_kwargs)
                             out_name = stem + ".jpg"
                         dst = _unique(out_dir / out_name)
+                        actual_name = dst.name          # 重名时可能是 xxx_1.jpg
                         dst.write_bytes(data)
-                        plans.append(SimpleNamespace(src=src, dst_name=out_name))
-                        done_names.append(out_name)
+                        plans.append(SimpleNamespace(src=src, dst_name=actual_name))
+                        done_names.append(actual_name)
                         done += 1
                 except Exception as exc:          # noqa: BLE001 单张失败不中断
                     import traceback

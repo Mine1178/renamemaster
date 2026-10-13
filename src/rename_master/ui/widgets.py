@@ -376,18 +376,37 @@ class SelectableText(tk.Text):
         if int(self.cget("height")) != lines:
             self.config(height=lines)
 
+    # 只读白名单：允许的光标移动 / 选择键（可带 Ctrl/Shift，均不改内容）
+    _MOVE_KEYS = {"Left", "Right", "Up", "Down", "Home", "End", "Prior", "Next",
+                  "KP_Left", "KP_Right", "KP_Up", "KP_Down", "KP_Home",
+                  "KP_End", "KP_Prior", "KP_Next"}
+    _MODIFIER_KEYS = {"Shift_L", "Shift_R", "Control_L", "Control_R",
+                      "Alt_L", "Alt_R", "Caps_Lock", "Alt_Pro"}
+
     def _on_key(self, event):
-        """只拦截可打印字符；Ctrl 组合键、功能键、方向键放行。"""
-        if event.state & 0x0004:
+        """只读白名单：默认拦截一切按键，仅放行导航 / 选择 / 复制 / 全选。
+
+        必须拦截：BackSpace / Delete / Return / Tab / 空格 / 可打印字符，
+        以及 Ctrl+V（粘贴）、Ctrl+X（剪切）、Ctrl+Z / Y（撤销重做）等。
+        """
+        ks = event.keysym
+        ctrl = bool(event.state & 0x0004)
+
+        # ① 纯修饰键（单独按下，无动作）
+        if ks in self._MODIFIER_KEYS:
             return None
-        nav_keys = {"Shift_L", "Shift_R", "Control_L", "Control_R",
-                    "Alt_L", "Alt_R", "Return", "BackSpace", "Delete",
-                    "Escape", "Tab", "Home", "End", "Left", "Right",
-                    "Up", "Down", "Prior", "Next", "Insert", "Caps_Lock",
-                    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8",
-                    "F9", "F10", "F11", "F12"}
-        if event.keysym in nav_keys:
+        # ② 光标移动 / 选择（Shift 扩展选区、Ctrl 跳词，均无害）
+        if ks in self._MOVE_KEYS:
             return None
+        # ③ 功能键 F1–F12 / Escape（默认无编辑动作）
+        if ks == "Escape" or (len(ks) > 1 and ks[0] == "F" and ks[1:].isdigit()):
+            return None
+        # ④ Ctrl 组合：仅放行 Ctrl+C 复制 / Ctrl+Insert 复制 / Ctrl+A 全选
+        if ctrl:
+            if ks in ("c", "C", "a", "A", "Insert"):
+                return None
+            return "break"
+        # ⑤ 其余一律拦截（BackSpace/Delete/Return/Tab/Insert/空格/可打印字符…）
         return "break"
 
     def _on_focus(self, _event=None):

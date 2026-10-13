@@ -418,13 +418,25 @@ def build(page: tk.Frame, app) -> None:
             return False
         return True
 
+    _est_cache = {}
+
     def _estimate(plan, target_kb: int) -> int:
         if target_kb <= 0:
             return scanner.file_size(plan.src)
         if Path(plan.src).suffix.lower() not in scanner.IMAGE_EXTS:
             return scanner.file_size(plan.src)
-        return compressor.estimate_size(plan.src, target_kb,
-                                        keep_exif=st["keep_exif"].get())
+        try:
+            ckey = (str(plan.src.resolve()), scanner.file_size(plan.src),
+                    target_kb, st["keep_exif"].get())
+        except OSError:
+            ckey = None
+        if ckey is not None and ckey in _est_cache:
+            return _est_cache[ckey]
+        val = compressor.estimate_size(plan.src, target_kb,
+                                       keep_exif=st["keep_exif"].get())
+        if ckey is not None:
+            _est_cache[ckey] = val
+        return val
 
     def _open_preview(on_confirm=None) -> None:
         if not _validate():
@@ -441,6 +453,10 @@ def build(page: tk.Frame, app) -> None:
                  font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
                  bg=T.C_BG, fg=T.C_TEXT, anchor="w").pack(fill=tk.X,
                                                           padx=T.S_LG, pady=(T.S_MD, T.S_SM))
+        # 预估进度提示（后台异步计算，不冻结界面）
+        calc_status = vlabel(win, text="", font=(T.FONT_FAMILY, T.F_SM),
+                             bg=T.C_BG, fg=T.C_TEXT_M, anchor="w")
+        calc_status.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_XS))
         tv = styled_tree(win, PREVIEW_COLS, height=14)
         pvsb = ttk.Scrollbar(win, orient="vertical",
                              style="RenameMaster.Vertical.TScrollbar", command=tv.yview)
@@ -451,30 +467,76 @@ def build(page: tk.Frame, app) -> None:
         tv.tag_configure("warn", foreground=STATUS_COLOR["warn"])
         tv.tag_configure("error", foreground=STATUS_COLOR["error"])
 
-        def _fill() -> None:
-            for plan in plans:
-                mark = {"ok": "✓ 正常", "warn": "⚠ 注意", "error": "✗ 禁止"}[plan.status]
-                tv.insert("", "end",
-                          values=(plan.src.name, plan.dst_name,
-                                  scanner.fmt_size(scanner.file_size(plan.src)),
-                                  scanner.fmt_size(_estimate(plan, target_kb)),
-                                  mark),
-                          tags=(plan.status,))
+        # 先一次性插入所有行（预计列占位"计算中"），拿到 iid 供后台回填
+        row_ids = []
+        for plan in plans:
+            mark = {"ok": "✓ 正常", "warn": "⚠ 注意", "error": "✗ 禁止"}[plan.status]
+            iid = tv.insert("", "end",
+                            values=(plan.src.name, plan.dst_name,
+                                    scanner.fmt_size(scanner.file_size(plan.src)),
+                                    "计算中…", mark),
+                            tags=(plan.status,))
+            row_ids.append(iid)
 
-        _fill()
         blocked = [p for p in plans if p.blocked]
         if blocked:
             vlabel(win, text=f"⚠ {len(blocked)} 条存在冲突，执行时会被跳过（红色行）。",
                      font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_DANGER,
                      anchor="w").pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_SM))
 
+        stop_est = threading.Event()
+
         btm = tk.Frame(win, bg=T.C_BG)
         btm.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_MD))
-        secondary_button(btm, "关闭", command=win.destroy).pack(side=tk.RIGHT)
+
+        def _close():
+            stop_est.set()
+            win.destroy()
+
+        secondary_button(btm, "关闭", command=_close).pack(side=tk.RIGHT)
         if on_confirm is not None:
             primary_button(btm, "▶ 确认执行",
-                           command=lambda: (win.destroy(), on_confirm(plans, target_kb))
+                           command=lambda: (stop_est.set(), win.destroy(),
+                                            on_confirm(plans, target_kb))
                            ).pack(side=tk.RIGHT, padx=(0, T.S_SM))
+
+        win.protocol("WM_DELETE_WINDOW", _close)
+
+        def _update_row(iid, est_bytes, done_i, total):
+            try:
+                cur = tv.item(iid, "values")
+                tv.item(iid, values=(cur[0], cur[1], cur[2],
+                                     scanner.fmt_size(est_bytes), cur[4]))
+                calc_status.config(
+                    text=f"正在计算压缩后大小… {done_i + 1}/{total}")
+            except tk.TclError:
+                pass
+
+        def _done_status():
+            try:
+                calc_status.config(text="✓ 压缩后大小已全部计算完成")
+            except tk.TclError:
+                pass
+
+        def _est_worker():
+            total = len(plans)
+            for i, (plan, iid) in enumerate(zip(plans, row_ids)):
+                if stop_est.is_set():
+                    return
+                est_bytes = _estimate(plan, target_kb)
+                app.safe_after(0, lambda iid=iid, e=est_bytes, i=i:
+                               _update_row(iid, e, i, total))
+            if not stop_est.is_set():
+                app.safe_after(0, _done_status)
+
+        if target_kb <= 0:
+            # 不压缩：预计大小 = 原大小，无需后台计算
+            for iid, plan in zip(row_ids, plans):
+                _update_row(iid, scanner.file_size(plan.src), row_ids.index(iid),
+                            len(plans))
+            _done_status()
+        else:
+            threading.Thread(target=_est_worker, daemon=True).start()
 
     def _run(plans, target_kb: int) -> None:
         out_dir = Path(st["out_dir"].get().strip())
@@ -551,6 +613,7 @@ def build(page: tk.Frame, app) -> None:
     # 故已在 app._action_bars 里登记、靠 <Map> 事件互斥显示。
     key = next((k for k, v in app.pages.items() if v is page), "photo")
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
+    page.st = st                             # 页面状态（供测试 / 调试直接读写）
     page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
     bars = getattr(app, "_action_bars", None)
     if bars is None:

@@ -258,9 +258,14 @@ def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
                        stroke: int = 0, shadow: bool = False) -> bytes:
     """斜向平铺旋转文字水印：铺满全图，裁掉一块仍有残留（防盗核心）。
 
-    angle：旋转角度（默认 30°）；spacing：水印间距倍数（小=密，大=疏）；
+    高效实现：只旋转**单个文字单元**（小图），再按旋转网格基向量重复贴到
+    W×H 画布；避免旧版「diag×diag 大画布旋转 + 画布外无效绘制」导致
+    1080P 也需十余秒。
+
+    angle：旋转角度（默认 30°）；spacing：间距倍数（小=密，大=疏）；
     stroke：非 0 时给文字加深色描边；shadow：投影，复杂背景上更清晰。
     """
+    import math
     from PIL import Image, ImageDraw
 
     if not text or not str(text).strip():
@@ -272,30 +277,52 @@ def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
     font = _load_font(font_size)
     fill = _with_alpha(_parse_color(color), opacity)
 
-    # 工作画布边长取对角线 + 余量：旋转后中心 W×H 必被覆盖，不留空角
-    diag = int((width ** 2 + height ** 2) ** 0.5) + font_size * 4
-    tile = Image.new("RGBA", (diag, diag), (0, 0, 0, 0))
-    td = ImageDraw.Draw(tile)
-    bbox = td.textbbox((0, 0), str(text), font=font)
+    # ① 文字尺寸（临时探针测 bbox）
+    probe = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+    bbox = probe.textbbox((0, 0), str(text), font=font)
     tw = max(1, bbox[2] - bbox[0])
     th = max(1, bbox[3] - bbox[1])
-    sx = int((tw + font_size * 2) * float(spacing))
-    sy = int((th + font_size * 3) * float(spacing))
     stroke_w = max(1, int(font_size * 0.07)) if stroke else 0
     stroke_fill = (0, 0, 0, min(255, fill[3] + 90)) if stroke else None
 
-    for row, y in enumerate(range(-diag, diag * 2, sy)):
-        offset = sx // 2 if row % 2 else 0          # 奇偶行交错，更难裁
-        for x in range(-diag, diag * 2, sx):
-            if shadow:
-                td.text((x - offset + 2, y - bbox[1] + 2), str(text),
-                        font=font, fill=(0, 0, 0, fill[3] // 2))
-            td.text((x - offset, y - bbox[1]), str(text), font=font,
-                    fill=fill, stroke_width=stroke_w, stroke_fill=stroke_fill)
+    # ② 单个文字单元（四周留白，容下描边 / 阴影 / 旋转）
+    pad = font_size * 2
+    unit = Image.new("RGBA", (tw + pad * 2, th + pad * 2), (0, 0, 0, 0))
+    ud = ImageDraw.Draw(unit)
+    tx, ty = pad - bbox[0], pad - bbox[1]
+    if shadow:
+        dlt = max(1, font_size // 10)
+        ud.text((tx + dlt, ty + dlt), str(text), font=font,
+                fill=(0, 0, 0, fill[3] // 2))
+    ud.text((tx, ty), str(text), font=font, fill=fill,
+            stroke_width=stroke_w, stroke_fill=stroke_fill)
+    unit_rot = unit.rotate(angle, resample=Image.BICUBIC, expand=True)
+    uw, uh = unit_rot.size
 
-    rot = tile.rotate(angle, resample=Image.BICUBIC, expand=False)
-    left, top = (diag - width) // 2, (diag - height) // 2
-    overlay = rot.crop((left, top, left + width, top + height))
+    # ③ 网格基向量：u 沿文字方向，v 垂直文字方向（spacing 控制疏密）
+    rad = math.radians(angle)
+    cos_a, sin_a = math.cos(rad), math.sin(rad)
+    along = tw + font_size * 3.0 * float(spacing)    # 沿文字方向步长
+    across = th + font_size * 5.0 * float(spacing)   # 垂直文字方向行距
+    u_vec = (along * cos_a, along * sin_a)
+    v_vec = (-across * sin_a, across * cos_a)
+
+    # ④ 铺满 W×H（从画布外开始，边缘也有斜字）；遍历范围保守取宽高和
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    n_i = int((width + height) / max(1.0, along)) + 2
+    n_j = int((width + height) / max(1.0, across)) + 2
+    for i in range(-n_i, n_i + 1):
+        ux, uy = u_vec[0] * i, u_vec[1] * i
+        for j in range(-n_j, n_j + 1):
+            cx = ux + v_vec[0] * j
+            cy = uy + v_vec[1] * j
+            # 包围盒完全不在画布内则跳过（纯数值判断，开销极小）
+            if (cx + uw / 2 < 0 or cx - uw / 2 > width or
+                    cy + uh / 2 < 0 or cy - uh / 2 > height):
+                continue
+            overlay.alpha_composite(unit_rot,
+                                   (int(cx - uw / 2), int(cy - uh / 2)))
+
     return _to_jpeg(Image.alpha_composite(rgba, overlay))
 
 

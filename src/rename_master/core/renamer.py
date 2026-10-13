@@ -170,20 +170,6 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
     mapping: Dict[str, str] = dict(rule.get("mapping") or {}) if mode == MODE_MAP else {}
     keep_ext = bool(rule.get("keep_ext", True))
 
-    # 模式二：新名重复 → 红色标记、禁止执行（CHECKLIST C4）
-    dup_new: set[str] = set()
-    if mode == MODE_MAP:
-        seen: Dict[str, int] = {}
-        for _k, v in mapping.items():
-            raw_v = str(v or "").strip().lower()
-            if not raw_v:
-                continue
-            # 同时按「完整名」与「去扩展名主名」计数：对照表可能带 .jpg 也可能不带
-            for key in (raw_v, os.path.splitext(raw_v)[0]):
-                if key:
-                    seen[key] = seen.get(key, 0) + 1
-        dup_new = {k for k, n in seen.items() if n > 1}
-
     used: set[str] = set()
     plans: List[RenamePlan] = []
     for i, src in enumerate(paths):
@@ -217,10 +203,21 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
             plan.mark_error("新文件名为空")
             plans.append(plan)
             continue
+        # 文件名过长：Windows 文件名上限 255 字符，提前拦截（否则执行阶段 WinError 123）
+        if len(plan.dst_name) > 255:
+            plan.mark_error(f"文件名过长（{len(plan.dst_name)} 字符，上限 255），请缩短基础名")
+            plans.append(plan)
+            continue
 
-        # 重名冲突：序号后追加 _b / _c …
-        stem, ext = os.path.splitext(plan.dst_name)
+        # 重名冲突：基于「最终完整文件名」判定（扩展名已补齐）
+        # - 模式二（对照表）：两个文件落到同一新名是对照表错误 → 禁止执行，提示回去修表
+        # - 模式一（前缀+序号）：序号本应唯一；万一冲突自动追加 _b/_c…
         if plan.dst_name.lower() in used:
+            if mode == MODE_MAP:
+                plan.mark_error("对照表新名重复，禁止执行")
+                plans.append(plan)
+                continue
+            stem, ext = os.path.splitext(plan.dst_name)
             for suf in _CONFLICT_SUFFIXES:
                 cand = f"{stem}_{suf}{ext}"
                 if cand.lower() not in used:
@@ -231,9 +228,6 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
                 plan.mark_error("目标名重复且无可用后缀")
                 plans.append(plan)
                 continue
-        if mode == MODE_MAP and (plan.dst_name.lower() in dup_new
-                                 or str(stem).lower() in dup_new):
-            plan.mark_error("对照表新名重复，禁止执行")
 
         used.add(plan.dst_name.lower())
         plans.append(plan)
@@ -247,6 +241,21 @@ def _open_log() -> Optional[Path]:
         return LOG_DIR / f"rename_{date.today().strftime('%Y%m%d')}.log"
     except OSError:
         return None
+
+
+def _sniff_ext(data: bytes) -> str:
+    """按字节头探测图片格式，返回扩展名（压缩后实际格式可能与原扩展名不同）。"""
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if data[:2] == b"BM":
+        return ".bmp"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return ""
 
 
 def execute_plan(plans: Sequence[RenamePlan],
@@ -287,19 +296,44 @@ def execute_plan(plans: Sequence[RenamePlan],
                 errors.append(f"{plan.src.name}: {plan.note}")
                 continue
             src_dir = src.resolve().parent
+            old_size = scanner.file_size(src)
+
+            # ① 备份原文件：必须在 move 之前做（move 后 src 已不在，否则 WinError 2）
+            if backup_originals:
+                bak_dir = out_dir / "_originals"
+                bak_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(str(src), str(bak_dir / src.name))
+
+            # ② 先做变换（压缩等），实际格式可能变化（PNG 透明图→JPEG）→ 同步扩展名
+            data = transform(src, plan.dst_name) if transform else None
+            if data is not None:
+                sniffed = _sniff_ext(data)
+                if sniffed and Path(plan.dst_name).suffix.lower() != sniffed:
+                    plan.dst_name = Path(plan.dst_name).stem + sniffed
+                    plan.add_warning(f"压缩后格式变为 {sniffed}，扩展名已同步")
+
+            # ③ 输出目录 / 防覆盖（基于最终名）
+            dst = out_dir / plan.dst_name
             if move and src_dir == out_resolved:
-                # 原地改名：目标名不得命中任何已存在文件（防覆盖）
-                dst = out_dir / plan.dst_name
+                # 原地改名：目标名不得命中已存在的其他文件（防覆盖）
                 if dst.exists() and dst.resolve() != src.resolve():
                     raise FileExistsError(f"目标已存在，拒绝覆盖：{dst.name}")
             elif src_dir == out_resolved and not move:
                 failed += 1
                 errors.append(f"{plan.src.name}: 输出目录与源目录相同，已跳过（拒绝原地覆盖）")
                 continue
-            dst = out_dir / plan.dst_name
+            elif not move and dst.exists() and dst.resolve() != src.resolve():
+                # copy / transform：目标已存在 → 自动加 _1/_2，不覆盖
+                stem_d, ext_d = dst.stem, dst.suffix
+                for k in range(1, 1000):
+                    cand = dst.with_name(f"{stem_d}_{k}{ext_d}")
+                    if not cand.exists():
+                        dst = cand
+                        break
+                plan.dst_name = dst.name
+                plan.add_warning("目标已存在，已自动改名避免覆盖")
 
-            old_size = scanner.file_size(src)
-            data = transform(src, plan.dst_name) if transform else None
+            # ④ 写盘
             if data is not None:
                 dst.write_bytes(data)
                 new_size = len(data)
@@ -309,10 +343,6 @@ def execute_plan(plans: Sequence[RenamePlan],
             else:
                 shutil.copy2(str(src), str(dst))
                 new_size = scanner.file_size(dst)
-            if backup_originals:
-                bak_dir = out_dir / "_originals"
-                bak_dir.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(str(src), str(bak_dir / src.name))
             plan.new_size = new_size
             done += 1
             done_names.append(plan.dst_name)

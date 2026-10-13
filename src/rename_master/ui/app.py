@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "RenameMaster"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.3"
+VERSION = "1.4"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = 10
