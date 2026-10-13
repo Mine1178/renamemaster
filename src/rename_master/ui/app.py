@@ -1,4 +1,4 @@
-﻿"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
+"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
 
 任务书 §4.1 / §4.2：
 - 左导航 112 逻辑 px、底色 #1e293b，高 DPI 下按 `winfo_fpixels("1i")/72` 放大；
@@ -44,6 +44,7 @@ class App:
         self._page_builders: Dict[str, Callable[[], None]] = {}
         self._closed = False
         self.cur = "home"
+        self._syncing = False                         # _sync_canvas 重入保护
         self.pending_drop_path: Optional[str] = None   # 页面未 build 时先存着
         self.cfg = config or ConfigManager()
 
@@ -209,11 +210,28 @@ class App:
         self._page_window = self.canvas.create_window((0, 0), window=self.page_host,
                                                       anchor="nw")
         self.canvas.bind("<Configure>", lambda e: self._sync_canvas())
-        self.page_host.bind("<Configure>", lambda e: self._refresh_scroll())
+        # 内容高度变化（模式切换 / 动态增删控件）时同步 item 高度，否则内容被压缩
+        self.page_host.bind("<Configure>", lambda e: self._sync_canvas())
         self.root.bind_all("<MouseWheel>", self._on_wheel)
+
+    def request_relayout(self) -> None:
+        """页面动态增删 / 显隐控件（如切换模式）后调用：空闲时同步滚动区高度。"""
+        try:
+            self.root.after_idle(self._sync_canvas)
+        except tk.TclError:
+            pass
 
     def _sync_canvas(self) -> None:
         """按当前视口重算 page_host 窗口尺寸（切页 / 缩放共用同一条路径）。"""
+        if self._syncing:
+            return
+        self._syncing = True
+        try:
+            return self._do_sync_canvas()
+        finally:
+            self._syncing = False
+
+    def _do_sync_canvas(self) -> None:
         try:
             view_w = self.canvas.winfo_width()
             view_h = self.canvas.winfo_height()

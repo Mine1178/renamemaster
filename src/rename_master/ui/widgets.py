@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk
 
 from rename_master.ui import theme as T
@@ -313,62 +314,69 @@ def section_label(master, text: str) -> tk.Label:
 
 
 class SelectableText(tk.Text):
-    """可鼠标拖选复制的文字块（基于 Text，无边框只读，选中即高亮）。
+    """可鼠标拖选复制的文字块（基于 Text，无边框只读）。
 
-    - 外观与 Label 一致，但支持鼠标拖选、Ctrl+C 复制；
-    - 禁止键入编辑（按键事件全部拦截）；
-    - 高度按文字行数自动撑开，宽度跟随父容器。
+    - 外观与 Label 一致：无边框、底色随父容器、宽度按内容自适应；
+    - 支持鼠标拖选高亮、Ctrl+C 复制；禁止键入编辑；
+    - pack(fill=X) 时横向拉伸到容器宽度，并排时只占内容宽度。
     """
 
     def __init__(self, master, text: str, *, bg=T.C_CARD, fg=T.C_TEXT_L,
                  font=None, **kw):
         font = font or (T.FONT_FAMILY, T.F_SM)
-        super().__init__(master, height=1, borderwidth=0, relief="flat",
+        self._font_obj = tkfont.Font(family=font[0], size=font[1])
+        self._raw_text = text
+        width_chars = self._fit_width(text)
+        height_lines = max(1, text.count("\n") + 1)
+        super().__init__(master, height=height_lines, width=width_chars,
+                         borderwidth=0, relief="flat",
                          background=bg, foreground=fg, font=font,
-                         cursor="xterm", wrap="word", padx=0, pady=0,
-                         highlightthickness=0, takefocus=0, **kw)
+                         cursor="xterm", wrap="none", padx=0, pady=0,
+                         highlightthickness=0, takefocus=1, **kw)
         self.insert("1.0", text)
         self._bg = bg
-        # 禁止键入编辑，但放行 Ctrl+C / Ctrl+A / 方向键等快捷键
         self.bind("<KeyPress>", self._on_key)
         self.bind("<FocusIn>", self._on_focus)
         self.bind("<FocusOut>", lambda e: self.tag_remove("sel", "1.0", "end"))
-        # 自动按换行撑开高度
-        self.bind("<Configure>", self._autosize)
-        self._autosize()
+
+    def _fit_width(self, text: str) -> int:
+        """返回刚好容纳最长一行文本的 Text width（字符数）。"""
+        try:
+            longest = max(text.split("\n"),
+                          key=lambda s: self._font_obj.measure(s))
+            pixel = self._font_obj.measure(longest)
+            avg = self._font_obj.measure("0")
+            return max(1, -(-pixel // avg))
+        except (tk.TclError, ValueError):
+            return max(1, len(text))
 
     def _on_key(self, event):
         """只拦截可打印字符；Ctrl 组合键、功能键、方向键放行。"""
-        # Ctrl 按下（0x4 = Control）→ 放行（Ctrl+C 复制、Ctrl+A 全选等）
         if event.state & 0x0004:
             return None
-        # 功能键 / 导航键放行
-        nav_keys = {"Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
-                    "Return", "BackSpace", "Delete", "Escape", "Tab", "Home", "End",
-                    "Left", "Right", "Up", "Down", "Prior", "Next", "Insert", "Caps_Lock",
-                    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}
+        nav_keys = {"Shift_L", "Shift_R", "Control_L", "Control_R",
+                    "Alt_L", "Alt_R", "Return", "BackSpace", "Delete",
+                    "Escape", "Tab", "Home", "End", "Left", "Right",
+                    "Up", "Down", "Prior", "Next", "Insert", "Caps_Lock",
+                    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8",
+                    "F9", "F10", "F11", "F12"}
         if event.keysym in nav_keys:
             return None
-        # 其余可打印字符 → 拦截
         return "break"
 
     def _on_focus(self, _event=None):
-        # 聚焦时改个浅底色提示"这里可选中"，失焦自动还原
+        # 聚焦时改浅底色提示"这里可选中"，失焦自动还原
         self.config(bg=T.C_HOVER)
 
-    def _autosize(self, _event=None):
-        self.update_idletasks()
-        line_count = int(self.index("end-1c").split(".")[0])
-        if self.cget("height") != line_count:
-            self.config(height=line_count)
-
     def set_text(self, text: str) -> None:
+        self._raw_text = text
         self.delete("1.0", "end")
         self.insert("1.0", text)
-        self._autosize()
+        self.config(height=max(1, text.count("\n") + 1),
+                    width=self._fit_width(text))
 
     def configure(self, **kw):
-        """兼容 .config(text=...) 写法：Text 本身不认 text 参数，拦截后转 set_text。"""
+        """兼容 .config(text=...) 写法：Text 本身不认 text 参数。"""
         if "text" in kw:
             self.set_text(kw.pop("text"))
         return super().configure(**kw)

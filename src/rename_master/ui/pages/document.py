@@ -273,6 +273,7 @@ def build(page: tk.Frame, app) -> None:
         else:
             prefix_box.pack(fill=tk.X)
             map_box.pack_forget()
+        app.request_relayout()
 
     # ---------- ③ 输出位置 ----------
     card3 = Card(page, "③ 输出位置", "输出到独立目录，源文件零改动", accent=T.C_SUCCESS)

@@ -349,6 +349,7 @@ def build(page: tk.Frame, app) -> None:
         else:
             prefix_box.pack(fill=tk.X)
             map_box.pack_forget()
+        app.request_relayout()
 
     # ---------- ③ 压缩 ----------
     card3 = Card(mid, "③ 压缩到指定大小", "二分法调 JPEG 质量，压不到再等比缩分辨率",
