@@ -190,9 +190,9 @@ def build(page: tk.Frame, app) -> None:
     sep_menu.config(width=2)
     sep_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
     _check(prow2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
-    hint_label(prefix_box, "勾选正文提取时：前缀 + 正文开头 + 序号；"
-                           "提取失败的文件自动退化为前缀 + 序号。示例：PDF_001.pdf"
-               ).pack(fill=tk.X, pady=(T.S_XS, 0))
+    _hl = hint_label(prefix_box, "勾选正文提取时：前缀 + 正文开头 + 序号；"
+                                 "提取失败的文件自动退化为前缀 + 序号。示例：PDF_001.pdf")
+    _hl.pack(fill=tk.X, pady=(T.S_XS, 0))
 
     # 模式二控件
     map_box = tk.Frame(card2.body, bg=T.C_CARD)

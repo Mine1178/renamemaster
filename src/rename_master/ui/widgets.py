@@ -7,6 +7,120 @@ from tkinter import ttk
 from rename_master.ui import theme as T
 
 
+# ---------- 文字复制辅助 ----------
+def copy_to_clipboard(widget, text: str) -> None:
+    """把文字写入系统剪贴板。"""
+    widget.clipboard_clear()
+    widget.clipboard_append(text)
+    widget.update()  # 剪贴板内容在程序退出后仍保留
+
+
+def enable_label_copy(widget) -> None:
+    """给 Label/Button 类控件加右键菜单，可一键复制其文字。"""
+    menu = tk.Menu(widget, tearoff=0)
+
+    def _do_copy():
+        try:
+            copy_to_clipboard(widget, str(widget.cget("text")))
+        except tk.TclError:
+            pass
+
+    menu.add_command(label="复制文字", command=_do_copy)
+
+    def _popup(event):
+        menu.tk_popup(event.x_root, event.y_root)
+
+    widget.bind("<Button-3>", _popup)
+
+
+def _tree_selected_text(tv: ttk.Treeview, col_idx=None, all_rows=False) -> str:
+    """把 Treeview 选中内容转成制表符/换行分隔的文本。
+
+    col_idx: 指定列号（1 起）→ 只复制该列；None → 复制整行；
+    all_rows: True → 复制全部行（含表头）。
+    """
+    cols = list(tv.cget("columns"))
+
+    if all_rows:
+        items = [tv.item(iid) for iid in tv.get_children("")]
+        heads = [tv.heading(c)["text"] or "" for c in cols]
+        lines = ["\t".join(heads)]
+    else:
+        sel = tv.selection()
+        if not sel:
+            return ""
+        items = [tv.item(iid) for iid in sel]
+        lines = []
+
+    for it in items:
+        vals = list(it["values"])
+        if col_idx is not None:
+            idx = col_idx - 1
+            lines.append(str(vals[idx]) if idx < len(vals) else "")
+        else:
+            lines.append("\t".join(str(v) for v in vals))
+    return "\n".join(lines)
+
+
+def enable_tree_copy(tv: ttk.Treeview) -> None:
+    """给 Treeview 加右键菜单 + Ctrl+C：复制单元格/整行/全部。"""
+    menu = tk.Menu(tv, tearoff=0)
+    state = {"col": None}  # 右键所在列
+
+    def _copy_cell():
+        text = _tree_selected_text(tv, col_idx=state["col"])
+        if text:
+            copy_to_clipboard(tv, text)
+
+    def _copy_row():
+        text = _tree_selected_text(tv)
+        if text:
+            copy_to_clipboard(tv, text)
+
+    def _copy_all():
+        copy_to_clipboard(tv, _tree_selected_text(tv, all_rows=True))
+
+    menu.add_command(label="复制此单元格", command=_copy_cell)
+    menu.add_command(label="复制选中行", command=_copy_row)
+    menu.add_separator()
+    menu.add_command(label="复制全部（含表头）", command=_copy_all)
+
+    def _popup(event):
+        row_id = tv.identify_row(event.y)
+        col_str = tv.identify_column(event.x)  # 形如 "#1"
+        if row_id:
+            # 若按住 Ctrl 则保留多选，否则只选中右键行
+            if not (event.state & 0x0004):
+                tv.selection_set(row_id)
+            tv.focus(row_id)
+        try:
+            state["col"] = int(col_str.lstrip("#"))
+        except ValueError:
+            state["col"] = None
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _copy_current(event=None):
+        # 快捷键：有焦点格/明确列时复制单元格，否则复制整行
+        col = state.get("col")
+        text = _tree_selected_text(tv, col_idx=col)
+        if not text:
+            text = _tree_selected_text(tv)
+        if text:
+            copy_to_clipboard(tv, text)
+        return "break"
+
+    tv.bind("<Button-3>", _popup)
+    tv.bind("<Control-c>", _copy_current)
+    tv.bind("<Control-C>", _copy_current)
+    # 左键点击时记住所在列，便于 Ctrl+C 复制单元格
+    tv.bind("<Button-1>",
+            lambda e: state.__setitem__("col",
+                                        (lambda s: int(s.lstrip("#"))
+                                         if s.lstrip("#").isdigit() else None)
+                                        (tv.identify_column(e.x))),
+            add="+")
+
+
 class Card(tk.Frame):
     """白底卡片：1px 边框 + 顶部 4px 强调色条 + hover 变色 + 描述自适应换行。
 
@@ -198,8 +312,74 @@ def section_label(master, text: str) -> tk.Label:
                     bg=T.C_CARD, fg=T.C_TEXT, anchor="w")
 
 
-def hint_label(master, text: str) -> tk.Label:
-    """卡片内辅助说明（F_SM 次级色）。"""
+class SelectableText(tk.Text):
+    """可鼠标拖选复制的文字块（基于 Text，无边框只读，选中即高亮）。
+
+    - 外观与 Label 一致，但支持鼠标拖选、Ctrl+C 复制；
+    - 禁止键入编辑（按键事件全部拦截）；
+    - 高度按文字行数自动撑开，宽度跟随父容器。
+    """
+
+    def __init__(self, master, text: str, *, bg=T.C_CARD, fg=T.C_TEXT_L,
+                 font=None, **kw):
+        font = font or (T.FONT_FAMILY, T.F_SM)
+        super().__init__(master, height=1, borderwidth=0, relief="flat",
+                         background=bg, foreground=fg, font=font,
+                         cursor="xterm", wrap="word", padx=0, pady=0,
+                         highlightthickness=0, takefocus=0, **kw)
+        self.insert("1.0", text)
+        self._bg = bg
+        # 禁止键入编辑，但放行 Ctrl+C / Ctrl+A / 方向键等快捷键
+        self.bind("<KeyPress>", self._on_key)
+        self.bind("<FocusIn>", self._on_focus)
+        self.bind("<FocusOut>", lambda e: self.tag_remove("sel", "1.0", "end"))
+        # 自动按换行撑开高度
+        self.bind("<Configure>", self._autosize)
+        self._autosize()
+
+    def _on_key(self, event):
+        """只拦截可打印字符；Ctrl 组合键、功能键、方向键放行。"""
+        # Ctrl 按下（0x4 = Control）→ 放行（Ctrl+C 复制、Ctrl+A 全选等）
+        if event.state & 0x0004:
+            return None
+        # 功能键 / 导航键放行
+        nav_keys = {"Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R",
+                    "Return", "BackSpace", "Delete", "Escape", "Tab", "Home", "End",
+                    "Left", "Right", "Up", "Down", "Prior", "Next", "Insert", "Caps_Lock",
+                    "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}
+        if event.keysym in nav_keys:
+            return None
+        # 其余可打印字符 → 拦截
+        return "break"
+
+    def _on_focus(self, _event=None):
+        # 聚焦时改个浅底色提示"这里可选中"，失焦自动还原
+        self.config(bg=T.C_HOVER)
+
+    def _autosize(self, _event=None):
+        self.update_idletasks()
+        line_count = int(self.index("end-1c").split(".")[0])
+        if self.cget("height") != line_count:
+            self.config(height=line_count)
+
+    def set_text(self, text: str) -> None:
+        self.delete("1.0", "end")
+        self.insert("1.0", text)
+        self._autosize()
+
+    def configure(self, **kw):
+        """兼容 .config(text=...) 写法：Text 本身不认 text 参数，拦截后转 set_text。"""
+        if "text" in kw:
+            self.set_text(kw.pop("text"))
+        return super().configure(**kw)
+
+    config = configure
+
+
+def hint_label(master, text: str, *, selectable: bool = True) -> tk.Widget:
+    """卡片内辅助说明；默认可鼠标拖选复制。"""
+    if selectable:
+        return SelectableText(master, text)
     return tk.Label(master, text=text, font=(T.FONT_FAMILY, T.F_SM),
                     bg=T.C_CARD, fg=T.C_TEXT_L, anchor="w", justify=tk.LEFT)
 
@@ -208,6 +388,7 @@ def styled_tree(master, columns, height=8, show="headings") -> ttk.Treeview:
     """统一风格的 Treeview（样式由 App._apply_treeview_style 注册）。
 
     columns: [(列 id, 标题, 宽度, 对齐), ...]
+    自动带右键菜单 + Ctrl+C 复制。
     """
     tv = ttk.Treeview(master, columns=[c[0] for c in columns], show=show,
                       height=height, style="RenameMaster.Treeview",
@@ -215,4 +396,5 @@ def styled_tree(master, columns, height=8, show="headings") -> ttk.Treeview:
     for cid, heading, width, anchor in columns:
         tv.heading(cid, text=heading, anchor=anchor)
         tv.column(cid, width=width, anchor=anchor, stretch=(width == 0))
+    enable_tree_copy(tv)
     return tv

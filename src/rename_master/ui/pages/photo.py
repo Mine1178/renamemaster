@@ -1,4 +1,4 @@
-﻿"""照片批量命名页：选文件 → 命名模式 → 压缩 → 输出 → 预览 / 执行（任务书 §4.6.2）。"""
+"""照片批量命名页：选文件 → 命名模式 → 压缩 → 输出 → 预览 / 执行（任务书 §4.6.2）。"""
 from __future__ import annotations
 
 import threading
@@ -259,7 +259,8 @@ def build(page: tk.Frame, app) -> None:
     sep_menu.config(width=2)
     sep_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
     _check(prow2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
-    hint_label(prefix_box, "示例：照片_001.jpg").pack(fill=tk.X, pady=(T.S_XS, 0))
+    _hl = hint_label(prefix_box, "示例：照片_001.jpg")
+    _hl.pack(fill=tk.X, pady=(T.S_XS, 0))
 
     # 模式二控件
     map_box = tk.Frame(card2.body, bg=T.C_CARD)
@@ -371,7 +372,8 @@ def build(page: tk.Frame, app) -> None:
              highlightthickness=1).pack(side=tk.LEFT)
     tk.Label(crow, text="KB", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M).pack(side=tk.LEFT, padx=(T.S_XS, T.S_SM))
-    hint_label(crow, "选中「自定义」时按此值压缩").pack(side=tk.LEFT)
+    _hl = hint_label(crow, "选中「自定义」时按此值压缩")
+    _hl.pack(side=tk.LEFT)
     _check(card3.body, "保留 EXIF", st["keep_exif"]).pack(fill=tk.X, pady=(T.S_SM, 0))
 
     def _sync_target() -> None:
@@ -408,7 +410,8 @@ def build(page: tk.Frame, app) -> None:
                           highlightbackground=T.C_BORDER, highlightthickness=1,
                           font=(T.FONT_FAMILY, T.F_BODY))
     wm_text_box.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(T.S_SM, 0))
-    hint_label(r2, "回车换行可写多行").pack(side=tk.LEFT, padx=(T.S_SM, 0), anchor="n")
+    _hl = hint_label(r2, "回车换行可写多行")
+    _hl.pack(side=tk.LEFT, padx=(T.S_SM, 0), anchor="n")
 
     # 第三行：颜色 / 透明度 / 位置 / 字号
     r3 = tk.Frame(card_wm.body, bg=T.C_CARD)
