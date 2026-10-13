@@ -4,7 +4,7 @@ from __future__ import annotations
 import tkinter as tk
 
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import Card, PageHeader
+from rename_master.ui.widgets import Card, PageHeader, vlabel
 
 # 窗口宽度 → 卡片列数（<1100px 收成 1 列，任务书 §4.6.1）
 _WIDE_MIN = 1100
@@ -52,14 +52,12 @@ def build(page: tk.Frame, app) -> None:
         card = Card(grid, title="", accent=accent,
                     on_click=lambda k=key: app.show(k))
         # body 自上而下：大号 emoji → 标题 → 描述
-        tk.Label(card.body, text=emoji, font=(T.FONT_FAMILY, 28),
-                 bg=T.C_CARD, fg=accent, anchor="w").pack(fill=tk.X)
-        tk.Label(card.body, text=title, font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
-                 bg=T.C_CARD, fg=T.C_TEXT, anchor="w").pack(fill=tk.X,
-                                                            pady=(T.S_XS, 0))
-        d = tk.Label(card.body, text=desc, font=(T.FONT_FAMILY, T.F_BODY),
-                     bg=T.C_CARD, fg=T.C_TEXT_SUB, anchor="w", justify=tk.LEFT,
-                     wraplength=240)
+        vlabel(card.body, emoji, font=(T.FONT_FAMILY, 28),
+               bg=T.C_CARD, fg=accent).pack(fill=tk.X)
+        vlabel(card.body, title, font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
+               bg=T.C_CARD, fg=T.C_TEXT).pack(fill=tk.X, pady=(T.S_XS, 0))
+        d = vlabel(card.body, desc, font=(T.FONT_FAMILY, T.F_BODY),
+                   bg=T.C_CARD, fg=T.C_TEXT_SUB, wrap="word")
         d.pack(fill=tk.X, pady=(T.S_XS, 0))
         descs.append(d)
         tk.Frame(card.body, bg=T.C_CARD, height=_SPACER_H).pack(fill=tk.X)
@@ -67,9 +65,8 @@ def build(page: tk.Frame, app) -> None:
 
     def _fit_descs() -> None:
         for card, d in zip(cards, descs):
-            width = card.body.winfo_width() - 2
-            if width > 80:
-                d.config(wraplength=width)
+            if hasattr(d, "_auto_height"):
+                d._auto_height()
 
     def _relayout(cols: int) -> None:
         for c in cards:
@@ -103,14 +100,14 @@ def build(page: tk.Frame, app) -> None:
     last_count = app.cfg.get("output.last_count", 0) or 0
     row = tk.Frame(recent.body, bg=T.C_CARD)
     row.pack(fill=tk.X)
-    tk.Label(row, text="上次输出目录：", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(row, text="上次输出目录：", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Label(row, text=last_dir, font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(row, text=last_dir, font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT, anchor="w").pack(side=tk.LEFT)
     row2 = tk.Frame(recent.body, bg=T.C_CARD)
     row2.pack(fill=tk.X, pady=(T.S_XS, 0))
-    tk.Label(row2, text="上次批次数量：", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(row2, text="上次批次数量：", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Label(row2, text=f"{last_count} 个文件",
+    vlabel(row2, text=f"{last_count} 个文件",
              font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
              bg=T.C_CARD, fg=T.C_ACCENT, anchor="w").pack(side=tk.LEFT)

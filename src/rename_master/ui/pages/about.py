@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import Card, PageHeader
+from rename_master.ui.widgets import Card, PageHeader, vlabel
 
 FEATURES = [
     ("统一前缀 + 序号", "位数 / 起始值 / 分隔符 / 保留扩展名均可自定义"),
@@ -40,11 +40,11 @@ def _resource_path(rel: str) -> Path:
 def _feature_row(master: tk.Widget, title: str, desc: str) -> None:
     row = tk.Frame(master, bg=T.C_CARD)
     row.pack(fill=tk.X, pady=(T.S_XS, 0))
-    tk.Label(row, text=f"· {title}", font=(T.FONT_FAMILY, T.F_BODY, "bold"),
-             bg=T.C_CARD, fg=T.C_TEXT, anchor="w", justify=tk.LEFT).pack(fill=tk.X)
-    tk.Label(row, text=f"    {desc}", font=(T.FONT_FAMILY, T.F_SM),
-             bg=T.C_CARD, fg=T.C_TEXT_SUB, anchor="w", justify=tk.LEFT,
-             wraplength=520).pack(fill=tk.X, pady=(0, T.S_XS))
+    vlabel(row, f"· {title}", font=(T.FONT_FAMILY, T.F_BODY, "bold"),
+           bg=T.C_CARD, fg=T.C_TEXT, justify=tk.LEFT).pack(fill=tk.X)
+    vlabel(row, f"    {desc}", font=(T.FONT_FAMILY, T.F_SM),
+           bg=T.C_CARD, fg=T.C_TEXT_SUB, justify=tk.LEFT,
+           wrap="word").pack(fill=tk.X, pady=(0, T.S_XS))
 
 
 def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> None:
@@ -79,14 +79,14 @@ def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> No
             zoom_btn.configure(text="🗗 还原")
         state["zoomed"] = not state["zoomed"]
 
-    tk.Label(dlg, text="☕", font=(T.FONT_FAMILY, 36),
-             bg=T.C_BG, fg=T.C_ACCENT).pack(pady=(T.S_MD, 0))
-    tk.Label(dlg, text="如果你喜欢这个工具",
-             font=(T.FONT_FAMILY, T.F_SECTION + 4, "bold"),
-             bg=T.C_BG, fg=T.C_TEXT).pack(pady=(T.S_XS, 0))
-    tk.Label(dlg, text="可以请作者喝杯咖啡，感谢赞助",
-             font=(T.FONT_FAMILY, T.F_BODY + 2),
-             bg=T.C_BG, fg=T.C_TEXT_M).pack(pady=(0, T.S_MD))
+    vlabel(dlg, "☕", font=(T.FONT_FAMILY, 36),
+           bg=T.C_BG, fg=T.C_ACCENT).pack(pady=(T.S_MD, 0))
+    vlabel(dlg, "如果你喜欢这个工具",
+           font=(T.FONT_FAMILY, T.F_SECTION + 4, "bold"),
+           bg=T.C_BG, fg=T.C_TEXT).pack(pady=(T.S_XS, 0))
+    vlabel(dlg, "可以请作者喝杯咖啡，感谢赞助",
+           font=(T.FONT_FAMILY, T.F_BODY + 2),
+           bg=T.C_BG, fg=T.C_TEXT_M).pack(pady=(0, T.S_MD))
 
     # 码图区：expand=True 占满剩余空间，两张大码居中并排
     codes = tk.Frame(dlg, bg=T.C_BG)
@@ -113,15 +113,15 @@ def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> No
                 lbl.image = photo  # type: ignore[attr-defined]
                 lbl.pack(expand=True)
             except Exception as e:
-                tk.Label(cell, text=f"[{label}加载失败: {e}]",
-                         font=(T.FONT_FAMILY, T.F_SM),
-                         bg=T.C_BG, fg=T.C_DANGER).pack()
+                vlabel(cell, f"[{label}加载失败: {e}]",
+                       font=(T.FONT_FAMILY, T.F_SM),
+                       bg=T.C_BG, fg=T.C_DANGER).pack()
         else:
             tk.Label(cell, text=f"[{label}\n待添加]",
                      font=(T.FONT_FAMILY, T.F_SM), width=16, height=12,
                      bg="#e2e8f0", fg=T.C_TEXT_L, relief=tk.SOLID, bd=1).pack()
-        tk.Label(cell, text=brand, font=(T.FONT_FAMILY, T.F_BODY + 2, "bold"),
-                 bg=T.C_BG, fg=T.C_TEXT).pack(pady=(T.S_SM, 0))
+        vlabel(cell, brand, font=(T.FONT_FAMILY, T.F_BODY + 2, "bold"),
+               bg=T.C_BG, fg=T.C_TEXT).pack(pady=(T.S_SM, 0))
 
     _load_code(alipay, "支付宝", "📱 支付宝扫码", 0)
     _load_code(wechat, "微信", "💬 微信扫码", 1)
@@ -145,14 +145,14 @@ def build(page: tk.Frame, app) -> None:
 
     head = tk.Frame(page, bg=T.C_BG)
     head.pack(fill=tk.X, pady=(T.S_MD, T.S_LG))
-    tk.Label(head, text="◉", font=(T.FONT_FAMILY, 44),
-             bg=T.C_BG, fg=T.C_ACCENT, anchor="center").pack(fill=tk.X)
-    tk.Label(head, text="RenameMaster v1.1",
-             font=(T.FONT_FAMILY, T.F_H1, "bold"),
-             bg=T.C_BG, fg=T.C_TEXT, anchor="center").pack(fill=tk.X,
+    vlabel(head, "◉", font=(T.FONT_FAMILY, 44),
+           bg=T.C_BG, fg=T.C_ACCENT, justify=tk.CENTER).pack(fill=tk.X)
+    vlabel(head, "RenameMaster v1.1",
+           font=(T.FONT_FAMILY, T.F_H1, "bold"),
+           bg=T.C_BG, fg=T.C_TEXT, justify=tk.CENTER).pack(fill=tk.X,
                                                            pady=(T.S_SM, 0))
-    tk.Label(head, text="文件批量命名助手", font=(T.FONT_FAMILY, T.F_SECTION),
-             bg=T.C_BG, fg=T.C_TEXT_L, anchor="center").pack(fill=tk.X,
+    vlabel(head, "文件批量命名助手", font=(T.FONT_FAMILY, T.F_SECTION),
+           bg=T.C_BG, fg=T.C_TEXT_L, justify=tk.CENTER).pack(fill=tk.X,
                                                              pady=(T.S_XS, 0))
 
     cols = tk.Frame(page, bg=T.C_BG)
@@ -168,8 +168,8 @@ def build(page: tk.Frame, app) -> None:
     stack = Card(cols, "技术栈", accent=T.C_INFO)
     stack.grid(row=0, column=1, sticky="nsew", padx=(T.S_SM, 0))
     for item in STACK:
-        tk.Label(stack.body, text=f"· {item}", font=(T.FONT_FAMILY, T.F_BODY),
-                 bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(fill=tk.X, pady=2)
+        vlabel(stack.body, f"· {item}", font=(T.FONT_FAMILY, T.F_BODY),
+               bg=T.C_CARD, fg=T.C_TEXT_M).pack(fill=tk.X, pady=2)
 
     # ---------- 赞助按钮（d2w v1.5.4 规范，secondary 浅底深字） ----------
     btn_row = tk.Frame(page, bg=T.C_BG)
@@ -182,6 +182,6 @@ def build(page: tk.Frame, app) -> None:
     sponsor_btn.pack()
     sponsor_btn.configure(command=lambda: _show_sponsor_dialog(page, sponsor_btn))
 
-    tk.Label(page, text="© 2026 · 本地工具，数据不出本机",
-             font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_TEXT_L,
-             anchor="center").pack(fill=tk.X, pady=(T.S_MD, T.S_MD))
+    vlabel(page, "© 2026 · 本地工具，数据不出本机",
+           font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_TEXT_L,
+           justify=tk.CENTER).pack(fill=tk.X, pady=(T.S_MD, T.S_MD))

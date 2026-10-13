@@ -218,6 +218,8 @@ class App:
         """页面动态增删 / 显隐控件（如切换模式）后调用：空闲时同步滚动区高度。"""
         try:
             self.root.after_idle(self._sync_canvas)
+            # 二次同步：覆盖连续切换时 after_idle 后内容尚未完全撑开的时序窗口
+            self.root.after(80, self._sync_canvas)
         except tk.TclError:
             pass
 

@@ -11,7 +11,7 @@ from rename_master.core import compressor, mapper, renamer, scanner, watermark
 from rename_master.ui import theme as T
 from rename_master.ui.widgets import (Card, PageHeader, hint_label,
                                       primary_button, secondary_button,
-                                      styled_tree)
+                                      styled_tree, vlabel, enable_label_copy)
 
 IMAGE_FILETYPES = [("图片文件", "*.jpg *.jpeg *.png *.bmp *.heic"),
                    ("所有文件", "*.*")]
@@ -71,19 +71,23 @@ STATUS_COLOR = {"ok": T.C_SUCCESS, "warn": T.C_WARNING, "error": T.C_DANGER}
 
 def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -> tk.Radiobutton:
     """卡片内统一风格的单选钮（白底，避免 ttk 主题在 Win 上的灰块）。"""
-    return tk.Radiobutton(master, text=text, variable=variable, value=value,
+    w = tk.Radiobutton(master, text=text, variable=variable, value=value,
                           command=command, bg=T.C_CARD, fg=T.C_TEXT,
                           activebackground=T.C_CARD, activeforeground=T.C_ACCENT,
                           selectcolor=T.C_CARD, highlightthickness=0,
                           font=(T.FONT_FAMILY, T.F_BODY), anchor="w", cursor="hand2")
+    enable_label_copy(w)
+    return w
 
 
 def _check(master, text: str, variable: tk.Variable, command=None) -> tk.Checkbutton:
-    return tk.Checkbutton(master, text=text, variable=variable, command=command,
+    w = tk.Checkbutton(master, text=text, variable=variable, command=command,
                           bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
                           activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
                           highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
                           anchor="w", cursor="hand2")
+    enable_label_copy(w)
+    return w
 
 
 def build(page: tk.Frame, app) -> None:
@@ -129,7 +133,7 @@ def build(page: tk.Frame, app) -> None:
     # 源目录输入框：既可用「选择文件夹」浏览，也可从资源管理器拖入文件夹自动填
     src_row = tk.Frame(card1.body, bg=T.C_CARD)
     src_row.pack(fill=tk.X, pady=(0, T.S_SM))
-    tk.Label(src_row, text="源目录", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(src_row, text="源目录", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     src_entry = tk.Entry(src_row, textvariable=st["src_dir"], relief=tk.FLAT,
                          bg=T.C_CARD, fg=T.C_TEXT,
@@ -145,7 +149,7 @@ def build(page: tk.Frame, app) -> None:
 
     drow = tk.Frame(card1.body, bg=T.C_CARD)
     drow.pack(fill=tk.X, pady=(T.S_XS, 0))
-    tk.Label(drow, text="选择文件夹", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(drow, text="选择文件夹", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.Entry(drow, textvariable=st["src_dir"], relief=tk.FLAT, bg=T.C_CARD,
              fg=T.C_TEXT, highlightbackground=T.C_BORDER,
@@ -235,7 +239,7 @@ def build(page: tk.Frame, app) -> None:
     prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
     prow = tk.Frame(prefix_box, bg=T.C_CARD)
     prow.pack(fill=tk.X, pady=(T.S_SM, 0))
-    tk.Label(prow, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(prow, text="基础名称", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.Entry(prow, textvariable=st["base"], relief=tk.FLAT,
              bg=T.C_CARD, fg=T.C_TEXT, highlightbackground=T.C_BORDER,
@@ -244,16 +248,16 @@ def build(page: tk.Frame, app) -> None:
 
     prow2 = tk.Frame(prefix_box, bg=T.C_CARD)
     prow2.pack(fill=tk.X, pady=(T.S_SM, 0))
-    tk.Label(prow2, text="位数", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(prow2, text="位数", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     digits_menu = tk.OptionMenu(prow2, st["digits"], "3", "4", "5")
     digits_menu.config(width=2)
     digits_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
-    tk.Label(prow2, text="起始", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(prow2, text="起始", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     tk.Spinbox(prow2, from_=0, to=99999, textvariable=st["start"],
                width=4).pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
-    tk.Label(prow2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(prow2, text="分隔符", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
     sep_menu = tk.OptionMenu(prow2, st["sep"], "_", "-", " ", "")
     sep_menu.config(width=2)
@@ -371,7 +375,7 @@ def build(page: tk.Frame, app) -> None:
              relief=tk.FLAT, bg=T.C_CARD, fg=T.C_TEXT,
              highlightbackground=T.C_BORDER,
              highlightthickness=1).pack(side=tk.LEFT)
-    tk.Label(crow, text="KB", font=(T.FONT_FAMILY, T.F_BODY),
+    vlabel(crow, text="KB", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M).pack(side=tk.LEFT, padx=(T.S_XS, T.S_SM))
     _hl = hint_label(crow, "选中「自定义」时按此值压缩")
     _hl.pack(side=tk.LEFT)
@@ -392,7 +396,7 @@ def build(page: tk.Frame, app) -> None:
     r1.pack(fill=tk.X)
     _check(r1, "☑ 添加水印文字", st["wm_on"],
            command=lambda: _sync_watermark()).pack(side=tk.LEFT)
-    wm_tpl_label = tk.Label(r1, text="📋 快速模板", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_tpl_label = vlabel(r1, text="📋 快速模板", font=(T.FONT_FAMILY, T.F_BODY),
                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_tpl_label.pack(side=tk.LEFT, padx=(T.S_LG, 0))
     wm_tpl_menu = tk.OptionMenu(r1, st["wm_template"], *[d for d, _ in WM_TEMPLATES],
@@ -403,7 +407,7 @@ def build(page: tk.Frame, app) -> None:
     # 第二行：多行水印文字
     r2 = tk.Frame(card_wm.body, bg=T.C_CARD)
     r2.pack(fill=tk.X, pady=(T.S_SM, 0))
-    wm_text_label = tk.Label(r2, text="水印文字", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_text_label = vlabel(r2, text="水印文字", font=(T.FONT_FAMILY, T.F_BODY),
                              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_text_label.pack(side=tk.LEFT, anchor="n")
     wm_text_box = tk.Text(r2, height=WM_TEXT_ROWS, wrap=tk.WORD, relief=tk.FLAT,
@@ -417,25 +421,25 @@ def build(page: tk.Frame, app) -> None:
     # 第三行：颜色 / 透明度 / 位置 / 字号
     r3 = tk.Frame(card_wm.body, bg=T.C_CARD)
     r3.pack(fill=tk.X, pady=(T.S_SM, 0))
-    wm_color_label = tk.Label(r3, text="颜色", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_color_label = vlabel(r3, text="颜色", font=(T.FONT_FAMILY, T.F_BODY),
                               bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_color_label.pack(side=tk.LEFT)
     wm_color_menu = tk.OptionMenu(r3, st["wm_color"], *[d for d, _ in WM_COLORS])
     wm_color_menu.config(width=5)
     wm_color_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_opacity_label = tk.Label(r3, text="透明度", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_opacity_label = vlabel(r3, text="透明度", font=(T.FONT_FAMILY, T.F_BODY),
                                 bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_opacity_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
     wm_opacity_menu = tk.OptionMenu(r3, st["wm_opacity"], *[d for d, _ in WM_OPACITIES])
     wm_opacity_menu.config(width=4)
     wm_opacity_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_pos_label = tk.Label(r3, text="位置", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_pos_label = vlabel(r3, text="位置", font=(T.FONT_FAMILY, T.F_BODY),
                             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_pos_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
     wm_pos_menu = tk.OptionMenu(r3, st["wm_pos"], *[d for d, _ in WM_POSITIONS])
     wm_pos_menu.config(width=8)
     wm_pos_menu.pack(side=tk.LEFT, padx=(T.S_XS, 0))
-    wm_size_label = tk.Label(r3, text="字号", font=(T.FONT_FAMILY, T.F_BODY),
+    wm_size_label = vlabel(r3, text="字号", font=(T.FONT_FAMILY, T.F_BODY),
                              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w")
     wm_size_label.pack(side=tk.LEFT, padx=(T.S_MD, 0))
     wm_size_menu = tk.OptionMenu(r3, st["wm_size"], *[d for d, _ in WM_SIZE_OPTIONS])
@@ -620,7 +624,7 @@ def build(page: tk.Frame, app) -> None:
         win.title("改名结果预览")
         win.geometry("820x460")
         win.configure(bg=T.C_BG)
-        tk.Label(win, text=f"共 {len(plans)} 个文件 → {st['out_dir'].get()}"
+        vlabel(win, text=f"共 {len(plans)} 个文件 → {st['out_dir'].get()}"
                            f"（压缩目标：{target_kb or '不压缩'}"
                            f"{' KB' if target_kb else ''}）",
                  font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
@@ -649,7 +653,7 @@ def build(page: tk.Frame, app) -> None:
         _fill()
         blocked = [p for p in plans if p.blocked]
         if blocked:
-            tk.Label(win, text=f"⚠ {len(blocked)} 条存在冲突，执行时会被跳过（红色行）。",
+            vlabel(win, text=f"⚠ {len(blocked)} 条存在冲突，执行时会被跳过（红色行）。",
                      font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_DANGER,
                      anchor="w").pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_SM))
 
@@ -712,7 +716,7 @@ def build(page: tk.Frame, app) -> None:
     left.pack(side=tk.LEFT)
     secondary_button(left, "👁 预览改名结果",
                      command=lambda: _open_preview()).pack(side=tk.LEFT)
-    bar_state = tk.Label(left, text="", font=(T.FONT_FAMILY, T.F_SM),
+    bar_state = vlabel(left, text="", font=(T.FONT_FAMILY, T.F_SM),
                          bg=T.C_BG, fg=T.C_TEXT_L)
     bar_state.pack(side=tk.LEFT, padx=T.S_SM)
     right = tk.Frame(bar, bg=T.C_BG)
