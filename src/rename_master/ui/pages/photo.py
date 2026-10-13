@@ -279,10 +279,9 @@ def build(page: tk.Frame, app) -> None:
     map_tree.configure(yscrollcommand=map_vsb.set)
     map_vsb.pack(side=tk.RIGHT, fill=tk.Y)
     map_tree.pack(fill=tk.X, pady=(T.S_SM, 0))
-    map_hint = hint_label(map_box,
-                          "第 1 列原文件名、第 2 列新文件名；未匹配的文件保持原名。")
-    map_hint.config(wraplength=500)
-    map_hint.pack(fill=tk.X)
+    hint_label(map_box,
+               "第1列原文件名，第2列新文件名，未匹配保持原名"
+               ).pack(fill=tk.X)
 
     def _import_map() -> None:
         path = filedialog.askopenfilename(title="选择对照表", filetypes=MAP_FILETYPES)
