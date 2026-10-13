@@ -1,0 +1,190 @@
+<html style="margin:0;padding:0;">
+<title>开源批量重命名工具调研与借鉴建议</title>
+<div style="width:100%;box-sizing:border-box;background:#f4f6f8;color:#1e293b;
+            font-family:'Microsoft YaHei',sans-serif;padding:28px 22px;line-height:1.5;">
+
+  <!-- 标题 -->
+  <div style="max-width:1120px;margin:0 auto;">
+    <div style="font-size:24px;font-weight:700;color:#0f172a;">开源批量重命名工具 · 功能调研与借鉴建议</div>
+    <div style="font-size:14px;color:#64748b;margin-top:6px;">
+      对照 GitHub 上 6 个主流开源项目，梳理 RenameMaster 已具备 / 缺失的能力，并给出可落地的优先级。调研日期 2026-10-13。
+    </div>
+
+    <!-- 工具一览 -->
+    <div style="font-size:17px;font-weight:700;margin:26px 0 12px;color:#0f172a;">一、主流开源工具一览</div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-weight:700;font-size:15px;">F2</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Go · MIT · 跨平台</div>
+        <div style="font-size:13px;margin-top:8px;">功能最全的 CLI 标杆，变量/正则/撤销/冲突处理极完整。</div>
+      </div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;border-top:3px solid #16a34a;">
+        <div style="font-weight:700;font-size:15px;">PBRenamer</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Python+Qt6 · GPLv3 · 跨平台</div>
+        <div style="font-size:13px;margin-top:8px;">与本项目技术栈最接近，GUI+CLI，最值得直接参考。</div>
+      </div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-weight:700;font-size:15px;">Szyszka</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Rust+GTK3 · MIT · 跨平台</div>
+        <div style="font-size:13px;margin-top:8px;">多规则自由组合、可重排序，快，能处理数十万条。</div>
+      </div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-weight:700;font-size:15px;">Ant Renamer</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Delphi · GPL · Windows</div>
+        <div style="font-size:13px;margin-top:8px;">经典老牌，支持 EXIF、随机名、扩展名替换。</div>
+      </div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-weight:700;font-size:15px;">Métamorphose</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Python+wx · GPL · 跨平台</div>
+        <div style="font-size:13px;margin-top:8px;">规则化程度高，文件夹也可批量改名。</div>
+      </div>
+      <div style="flex:1 1 160px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;">
+        <div style="font-weight:700;font-size:15px;">PowerRename</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">C# · MIT · Windows（PowerToys）</div>
+        <div style="font-size:13px;margin-top:8px;">微软官方，搜索替换 + 正则 + 预览，简洁。</div>
+      </div>
+    </div>
+
+    <!-- 功能矩阵 -->
+    <div style="font-size:17px;font-weight:700;margin:30px 0 12px;color:#0f172a;">
+      二、功能对比矩阵（✓ 支持 · — 缺失）
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="text-align:left;padding:10px 12px;font-weight:700;width:30%;">功能</th>
+            <th style="padding:10px 6px;font-weight:700;">F2</th>
+            <th style="padding:10px 6px;font-weight:700;">PBRenamer</th>
+            <th style="padding:10px 6px;font-weight:700;">Szyszka</th>
+            <th style="padding:10px 6px;font-weight:700;background:#fef3c7;">RenameMaster</th>
+          </tr>
+        </thead>
+        <tbody id="matrix"></tbody>
+      </table>
+    </div>
+    <div style="font-size:12.5px;color:#64748b;margin-top:8px;">
+      注：RenameMaster 另有三项同类工具少见的能力——照片自动压缩（1M/500K/200K）、文档/PDF 正文开头提取、模式二一键提取文件名。
+    </div>
+
+    <!-- 借鉴优先级 -->
+    <div style="font-size:17px;font-weight:700;margin:30px 0 12px;color:#0f172a;">三、借鉴优先级建议</div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #dc2626;border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:15px;color:#b91c1c;">第一梯队 · 高价值，建议优先做</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;">
+        <div style="flex:1 1 220px;background:#fef2f2;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;font-size:14px;">① 撤销 Undo</div>
+          <div style="font-size:12.5px;color:#475569;margin-top:4px;">所有工具的标配安全兜底。记录改名前后映射即可，你已有对照表基础，成本低。</div>
+        </div>
+        <div style="flex:1 1 220px;background:#fef2f2;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;font-size:14px;">② 查找替换（含正则）</div>
+          <div style="font-size:12.5px;color:#475569;margin-top:4px;">清理文件名里的杂乱字符、空格、编号，最高频；正则可做删除/交换。</div>
+        </div>
+        <div style="flex:1 1 220px;background:#fef2f2;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;font-size:14px;">③ 排序选项</div>
+          <div style="font-size:12.5px;color:#475569;margin-top:4px;">决定序号顺序：按文件名/修改时间/拍摄时间。现场照片按时间编号是刚需。</div>
+        </div>
+        <div style="flex:1 1 220px;background:#fef2f2;border-radius:8px;padding:10px 12px;">
+          <div style="font-weight:700;font-size:14px;">④ 日期 / EXIF 变量</div>
+          <div style="font-size:12.5px;color:#475569;margin-top:4px;">照片按拍摄日期、文件按修改时间命名，父目录名也可作变量。</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #d97706;border-radius:10px;padding:14px 16px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:15px;color:#b45309;">第二梯队 · 实用，成本低</div>
+      <div style="font-size:13.5px;color:#334155;margin-top:8px;">
+        ⑤ 大小写 / 空格 / 分隔符统一转换 &nbsp;·&nbsp;
+        ⑥ 父目录名变量 &nbsp;·&nbsp;
+        ⑦ 仅对勾选的行应用改名 &nbsp;·&nbsp;
+        ⑧ 常用规则保存为预设（Preset）
+      </div>
+    </div>
+
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #64748b;border-radius:10px;padding:14px 16px;">
+      <div style="font-weight:700;font-size:15px;color:#475569;">第三梯队 · 扩展，按需再做</div>
+      <div style="font-size:13.5px;color:#334155;margin-top:8px;">
+        ⑨ 递归子目录 + 文件过滤 &nbsp;·&nbsp;
+        ⑩ 多规则组合（需调整架构，成本较高）&nbsp;·&nbsp;
+        ⑪ 文件夹重命名 &nbsp;·&nbsp;
+        ⑫ 随机名 / 文件哈希 / ID3 音乐标签 / 命令行（与当前场景关系较小）
+      </div>
+    </div>
+
+    <div style="margin-top:22px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:14px 16px;font-size:13.5px;color:#065f46;">
+      <span style="font-weight:700;">一句话结论：</span>
+      核心的"前缀+序号 / 对照表 / 压缩 / 正文提取"你已经有了，最划算的补强是
+      <b>撤销 + 查找替换/正则 + 排序 + 拍摄日期变量</b>——这四项正好覆盖现场照片、文档整理最容易出错和返工的环节；PBRenamer 是最适合直接参考的开源实现。
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var groups = [
+    { t: "安全与预览", rows: [
+      ["实时预览 / Dry-run", 1,1,1,1],
+      ["撤销 Undo", 1,1,1,0],
+      ["冲突检测", 1,1,1,1],
+      ["冲突自动解决 / 阻止", 1,1,0,0]
+    ]},
+    { t: "文本处理", rows: [
+      ["查找替换（纯文本）", 1,1,1,0],
+      ["正则替换 / 捕获组", 1,1,1,0],
+      ["大小写转换", 1,1,1,0],
+      ["空格 / 分隔符裁剪", 1,1,1,0],
+      ["去重 / 清除字符", 1,1,1,0],
+      ["重音字符转换", 1,1,0,0]
+    ]},
+    { t: "命名变量", rows: [
+      ["序号 / 计数器", 1,1,1,1],
+      ["文件日期（创建/修改）", 1,1,0,0],
+      ["父目录名（多级）", 1,1,0,0],
+      ["EXIF 拍摄信息", 1,1,0,0],
+      ["ID3 音乐标签", 1,1,0,0],
+      ["原文件名 / 扩展名变量", 1,1,0,1]
+    ]},
+    { t: "范围与批量", rows: [
+      ["递归子目录", 1,1,1,0],
+      ["文件过滤（如 *.txt）", 1,1,0,0],
+      ["保留扩展名", 1,1,1,1],
+      ["排序（名/时间/大小）", 1,1,1,0],
+      ["仅对选中项应用", 1,1,1,0],
+      ["文件夹重命名", 1,1,1,0]
+    ]},
+    { t: "效率", rows: [
+      ["多规则组合", 0,1,1,0],
+      ["规则重排序", 0,1,1,0],
+      ["预设保存 Preset", 0,1,1,0],
+      ["命令行 CLI", 1,1,0,0]
+    ]}
+  ];
+
+  function cell(v, isRM) {
+    var bg = isRM ? ' style="background:#fef9e7;"' : "";
+    if (v) {
+      return '<td align="center" ' + bg.replace(' style=',' style=') +
+             '><span style="color:#16a34a;font-weight:700;">✓</span></td>';
+    }
+    return '<td align="center"' + bg + '><span style="color:#cbd5e1;">—</span></td>';
+  }
+
+  var html = "";
+  groups.forEach(function (g) {
+    html += '<tr><td colspan="5" style="background:#f8fafc;padding:7px 12px;font-weight:700;font-size:12.5px;color:#475569;">' + g.t + "</td></tr>";
+    g.rows.forEach(function (r) {
+      html += '<tr style="border-top:1px solid #eef2f6;">';
+      html += '<td style="padding:8px 12px;">' + r[0] + "</td>";
+      for (var i = 1; i <= 4; i++) {
+        html += cell(r[i], i === 4);
+      }
+      html += "</tr>";
+    });
+  });
+  var box = document.getElementById("matrix");
+  if (box) box.innerHTML = html;
+})();
+</script>
+</html>
