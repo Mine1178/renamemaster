@@ -28,6 +28,7 @@ _NAV_FONT_SIZE = 10
 NAV_ITEMS = [
     ("home", "🏠", "首页"),
     ("photo", "📷", "照片命名"),
+    ("pdf", "📄", "PDF 命名"),
     ("spreadsheet", "📊", "表格命名"),
     ("document", "📄", "文档命名"),
     ("about", "ℹ️", "关于"),
@@ -131,6 +132,7 @@ class App:
         self._page_builders = {
             "home": self._build_home,
             "photo": self._build_photo,
+            "pdf": self._build_pdf,
             "spreadsheet": self._build_spreadsheet,
             "document": self._build_document,
             "about": self._build_about,
@@ -368,6 +370,13 @@ class App:
         f = self._page()
         self.pages["photo"] = f
         from rename_master.ui.pages.photo import build
+        build(f, self)
+        self._mount_action_bar()
+
+    def _build_pdf(self) -> None:
+        f = self._page()
+        self.pages["pdf"] = f
+        from rename_master.ui.pages.pdf import build
         build(f, self)
         self._mount_action_bar()
 
