@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "RenameMaster"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.0"
+VERSION = "1.1"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = 10
@@ -37,6 +37,8 @@ NAV_ITEMS = [
 
 class App:
     """左侧导航 + 右侧内容框架；页面延迟构建；底部操作栏由页面注册（不随滚动）。"""
+
+    VERSION = VERSION  # 暴露给页面（如关于页）统一引用，避免版本号多处不同步
 
     def __init__(self, root: tk.Tk, config: Optional[ConfigManager] = None):
         self.root = root

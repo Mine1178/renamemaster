@@ -141,13 +141,13 @@ def _show_sponsor_dialog(parent: tk.Misc, anchor: tk.Widget | None = None) -> No
 
 
 def build(page: tk.Frame, app) -> None:
-    PageHeader(page, "关于 RenameMaster", "版本 v1.1 · 本地运行，数据不出本机")
+    PageHeader(page, "关于 RenameMaster", f"版本 v{app.VERSION} · 本地运行，数据不出本机")
 
     head = tk.Frame(page, bg=T.C_BG)
     head.pack(fill=tk.X, pady=(T.S_MD, T.S_LG))
     vlabel(head, "◉", font=(T.FONT_FAMILY, 44),
            bg=T.C_BG, fg=T.C_ACCENT, justify=tk.CENTER).pack(fill=tk.X)
-    vlabel(head, "RenameMaster v1.1",
+    vlabel(head, f"RenameMaster v{app.VERSION}",
            font=(T.FONT_FAMILY, T.F_H1, "bold"),
            bg=T.C_BG, fg=T.C_TEXT, justify=tk.CENTER).pack(fill=tk.X,
                                                            pady=(T.S_SM, 0))

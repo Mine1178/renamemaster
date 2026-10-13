@@ -402,6 +402,12 @@ class SelectableText(tk.Text):
             self.set_text(kw.pop("text"))
         return super().configure(**kw)
 
+    def cget(self, key):
+        """兼容 .cget('text') 写法：返回当前文本（Label 语义）。"""
+        if key == "text":
+            return self._raw_text
+        return super().cget(key)
+
     config = configure
 
 
