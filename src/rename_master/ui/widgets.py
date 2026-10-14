@@ -480,3 +480,74 @@ def styled_tree(master, columns, height=8, show="headings") -> ttk.Treeview:
         tv.column(cid, width=width, anchor=anchor, stretch=(width == 0))
     enable_tree_copy(tv)
     return tv
+
+
+# ---------- 弹窗（对话框）统一布局：尺寸 / 居中 / 双向滚动 / 固定按钮栏 ----------
+def fit_dialog(win, width: int = 960, height: int = 600,
+               min_w: int = 760, min_h: int = 480) -> tk.Toplevel:
+    """设置弹窗初始尺寸、最小尺寸并屏幕居中。
+
+    - 初始尺寸不超过屏幕的 90%；
+    - minsize 保证缩小后信息仍基本可见；
+    - 在 win.configure(bg=...) 之后调用。
+    """
+    win.update_idletasks()
+    sw = win.winfo_screenwidth()
+    sh = win.winfo_screenheight()
+    w = min(width, int(sw * 0.92))
+    h = min(height, int(sh * 0.9))
+    min_w = min(min_w, w)
+    min_h = min(min_h, h)
+    win.minsize(min_w, min_h)
+    x = max(0, (sw - w) // 2)
+    y = max(0, (sh - h) // 2)
+    win.geometry(f"{w}x{h}+{x}+{y}")
+    return win
+
+
+def dialog_tree(master, columns, bg: str, height: int = 14):
+    """带「垂直 + 水平」滚动条的 Treeview，返回 (tv, 外层容器)。
+
+    - 纵向滚动：文件多时上下查看；
+    - 横向滚动：文件名长、列总宽超过窗口时左右查看，完整显示文件名；
+    - 外层容器已 pack(fill=BOTH, expand=True)，调用方无需再 pack tv；
+    - 内容超出可视区时由 Treeview 自身滚动，高度由外层弹窗自适应，
+      不会把底部按钮栏挤出窗口。
+    """
+    box = tk.Frame(master, bg=bg)
+    box.pack(fill=tk.BOTH, expand=True, padx=T.S_LG, pady=(0, T.S_SM))
+
+    tv = styled_tree(box, columns, height=height)
+    vsb = ttk.Scrollbar(box, orient="vertical",
+                        style="RenameMaster.Vertical.TScrollbar",
+                        command=tv.yview)
+    hsb = ttk.Scrollbar(box, orient="horizontal",
+                        style="RenameMaster.Horizontal.TScrollbar",
+                        command=tv.xview)
+    tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+    tv.grid(row=0, column=0, sticky="nsew")
+    vsb.grid(row=0, column=1, sticky="ns")
+    hsb.grid(row=1, column=0, sticky="ew")
+    box.rowconfigure(0, weight=1)
+    box.columnconfigure(0, weight=1)
+    return tv, box
+
+
+def dialog_buttons(master, bg: str, on_close, on_confirm=None,
+                   confirm_text: str = "▶ 确认执行", close_text: str = "关闭"):
+    """弹窗底部固定按钮栏（不随内容滚动），始终可见。
+
+    - 用 pack(side=BOTTOM) 固定在窗口底部：中间内容区即使请求高度很大、
+      或有很多行，也只会压缩内容区（Treeview 自身滚动），按钮栏永远按
+      自身请求高度完整显示，不会被挤成一条线或挤出可视区；
+    - 右侧依次：确认执行（主按钮，可选）/ 关闭（次按钮）。
+    返回按钮栏 Frame。
+    """
+    btm = tk.Frame(master, bg=bg)
+    btm.pack(side=tk.BOTTOM, fill=tk.X, padx=T.S_LG, pady=(T.S_SM, T.S_MD))
+    secondary_button(btm, close_text, command=on_close).pack(side=tk.RIGHT)
+    if on_confirm is not None:
+        primary_button(btm, confirm_text, command=on_confirm
+                       ).pack(side=tk.RIGHT, padx=(0, T.S_SM))
+    return btm

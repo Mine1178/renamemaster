@@ -12,7 +12,8 @@ from tkinter import filedialog, messagebox, ttk
 from rename_master.core import (doc_extract, history, mapper, naming_vars,
                                 renamer, scanner)
 from rename_master.ui import advanced, theme as T
-from rename_master.ui.widgets import (Card, PageHeader, hint_label,
+from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
+                                      dialog_tree, fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
 
@@ -410,8 +411,8 @@ def build(page: tk.Frame, app) -> None:
         plans = _make_plans()
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
-        win.geometry("840x460")
         win.configure(bg=T.C_BG)
+        fit_dialog(win, 1000, 600)
         head = "共 %d 个文件 → %s" % (len(plans), st["out_dir"].get())
         if st["use_content"].get():
             head += f"（正文前 {BODY_CHARS} 字）"
@@ -419,12 +420,7 @@ def build(page: tk.Frame, app) -> None:
                  bg=T.C_BG, fg=T.C_TEXT, anchor="w").pack(fill=tk.X,
                                                           padx=T.S_LG,
                                                           pady=(T.S_MD, T.S_SM))
-        tv = styled_tree(win, PREVIEW_COLS, height=14)
-        pvsb = ttk.Scrollbar(win, orient="vertical",
-                             style="RenameMaster.Vertical.TScrollbar", command=tv.yview)
-        tv.configure(yscrollcommand=pvsb.set)
-        pvsb.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, T.S_LG))
-        tv.pack(fill=tk.BOTH, expand=True, padx=(T.S_LG, 0), pady=(0, T.S_SM))
+        tv, _tbox = dialog_tree(win, PREVIEW_COLS, T.C_BG)
         tv.tag_configure("ok", foreground=STATUS_COLOR["ok"])
         tv.tag_configure("warn", foreground=STATUS_COLOR["warn"])
         tv.tag_configure("error", foreground=STATUS_COLOR["error"])
@@ -440,13 +436,12 @@ def build(page: tk.Frame, app) -> None:
                      font=(T.FONT_FAMILY, T.F_SM), bg=T.C_BG, fg=T.C_DANGER,
                      anchor="w").pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_SM))
 
-        btm = tk.Frame(win, bg=T.C_BG)
-        btm.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_MD))
-        secondary_button(btm, "关闭", command=win.destroy).pack(side=tk.RIGHT)
-        if on_confirm is not None:
-            primary_button(btm, "▶ 确认执行",
-                           command=lambda: (win.destroy(), on_confirm(plans))
-                           ).pack(side=tk.RIGHT, padx=(0, T.S_SM))
+        def _confirm():
+            win.destroy()
+            on_confirm(plans)
+
+        dialog_buttons(win, T.C_BG, win.destroy,
+                       on_confirm=_confirm if on_confirm is not None else None)
 
     def _run(plans) -> None:
         out_dir = Path(st["out_dir"].get().strip())
@@ -518,6 +513,7 @@ def build(page: tk.Frame, app) -> None:
 
     key = next((k for k, v in app.pages.items() if v is page), "document")
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
+    page.st = st                             # 页面状态（供测试 / 调试直接读写）
     page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
     bars = getattr(app, "_action_bars", None)
     if bars is None:

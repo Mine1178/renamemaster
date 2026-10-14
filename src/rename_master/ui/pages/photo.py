@@ -8,7 +8,8 @@ from tkinter import filedialog, messagebox, ttk
 
 from rename_master.core import (compressor, history, mapper, renamer, scanner)
 from rename_master.ui import advanced, theme as T
-from rename_master.ui.widgets import (Card, PageHeader, hint_label,
+from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
+                                      dialog_tree, fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
 
@@ -445,8 +446,8 @@ def build(page: tk.Frame, app) -> None:
         plans = _make_plans()
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
-        win.geometry("820x460")
         win.configure(bg=T.C_BG)
+        fit_dialog(win, 980, 600)
         vlabel(win, text=f"共 {len(plans)} 个文件 → {st['out_dir'].get()}"
                            f"（压缩目标：{target_kb or '不压缩'}"
                            f"{' KB' if target_kb else ''}）",
@@ -457,12 +458,7 @@ def build(page: tk.Frame, app) -> None:
         calc_status = vlabel(win, text="", font=(T.FONT_FAMILY, T.F_SM),
                              bg=T.C_BG, fg=T.C_TEXT_M, anchor="w")
         calc_status.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_XS))
-        tv = styled_tree(win, PREVIEW_COLS, height=14)
-        pvsb = ttk.Scrollbar(win, orient="vertical",
-                             style="RenameMaster.Vertical.TScrollbar", command=tv.yview)
-        tv.configure(yscrollcommand=pvsb.set)
-        pvsb.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, T.S_LG))
-        tv.pack(fill=tk.BOTH, expand=True, padx=(T.S_LG, 0), pady=(0, T.S_SM))
+        tv, _tbox = dialog_tree(win, PREVIEW_COLS, T.C_BG)
         tv.tag_configure("ok", foreground=STATUS_COLOR["ok"])
         tv.tag_configure("warn", foreground=STATUS_COLOR["warn"])
         tv.tag_configure("error", foreground=STATUS_COLOR["error"])
@@ -486,20 +482,17 @@ def build(page: tk.Frame, app) -> None:
 
         stop_est = threading.Event()
 
-        btm = tk.Frame(win, bg=T.C_BG)
-        btm.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_MD))
-
         def _close():
             stop_est.set()
             win.destroy()
 
-        secondary_button(btm, "关闭", command=_close).pack(side=tk.RIGHT)
-        if on_confirm is not None:
-            primary_button(btm, "▶ 确认执行",
-                           command=lambda: (stop_est.set(), win.destroy(),
-                                            on_confirm(plans, target_kb))
-                           ).pack(side=tk.RIGHT, padx=(0, T.S_SM))
+        def _confirm():
+            stop_est.set()
+            win.destroy()
+            on_confirm(plans, target_kb)
 
+        dialog_buttons(win, T.C_BG, _close,
+                       on_confirm=_confirm if on_confirm is not None else None)
         win.protocol("WM_DELETE_WINDOW", _close)
 
         def _update_row(iid, est_bytes, done_i, total):
@@ -590,7 +583,7 @@ def build(page: tk.Frame, app) -> None:
     bar = tk.Frame(app.content, bg=T.C_BG)
     left = tk.Frame(bar, bg=T.C_BG)
     left.pack(side=tk.LEFT)
-    secondary_button(left, "👁 预览改名结果",
+    secondary_button(left, "👁 预览",
                      command=lambda: _open_preview()).pack(side=tk.LEFT)
     secondary_button(left, "↩ 撤销", command=app.undo_last_batch
                      ).pack(side=tk.LEFT, padx=(T.S_SM, 0))

@@ -15,7 +15,8 @@ from types import SimpleNamespace
 
 from rename_master.core import history, scanner, watermark, blind_wm
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import (Card, PageHeader, hint_label,
+from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
+                                      dialog_tree, fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
 
@@ -555,23 +556,17 @@ def build(page: tk.Frame, app) -> None:
     def _show_extract(extracted, result):
         win = tk.Toplevel(app.root)
         win.title("盲水印提取结果")
-        win.geometry("640x420")
         win.configure(bg=T.C_BG)
+        fit_dialog(win, 780, 520)
         vlabel(win, text=f"共提取 {len(extracted)} 张图片的盲水印",
                font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
                bg=T.C_BG, fg=T.C_TEXT, anchor="w").pack(fill=tk.X,
                                                         padx=T.S_LG, pady=T.S_MD)
-        tv = styled_tree(win, [("file", "文件", 260, "w"), ("wm", "提取的盲水印", 340, "w")],
-                         height=14)
-        sb = ttk.Scrollbar(win, orient="vertical",
-                           style="RenameMaster.Vertical.TScrollbar", command=tv.yview)
-        tv.configure(yscrollcommand=sb.set)
-        sb.pack(side=tk.RIGHT, fill=tk.Y, padx=(0, T.S_LG))
-        tv.pack(fill=tk.BOTH, expand=True, padx=(T.S_LG, 0))
+        cols = [("file", "文件", 260, "w"), ("wm", "提取的盲水印", 440, "w")]
+        tv, _box = dialog_tree(win, cols, T.C_BG)
         for fname, txt in extracted:
             tv.insert("", "end", values=(fname, txt))
-        secondary_button(win, "关闭", command=win.destroy).pack(
-            anchor="e", padx=T.S_LG, pady=T.S_MD)
+        dialog_buttons(win, T.C_BG, win.destroy)
 
     # ---------- 底部操作栏 ----------
     bar = tk.Frame(app.content, bg=T.C_BG)
