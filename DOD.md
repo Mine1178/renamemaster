@@ -1,53 +1,46 @@
 # RenameMaster 交付完成单（Definition of Done）
 
-版本：v1.4 | 交付日期：2026-10-14 | 项目目录：`D:\Desktop\SD\13.Rename`
+版本：v1.8 | 交付日期：2026-10-15 | 项目目录：`D:\Desktop\SD\13.Rename`
 
 ## 1. 交付物清单
 
 | 交付物 | 路径 | 说明 |
 |---|---|---|
-| **免安装 EXE** | `dist\RenameMaster.exe` | 单文件，48.5 MB，双击即用、无黑窗 |
-| **安装程序** | `dist\RenameMaster_Setup.exe` | 50.3 MB，桌面/开始菜单快捷方式 + 卸载入口 |
-| **PDF 使用手册** | `dist\RenameMaster_使用手册.pdf` | 0.46 MB，深蓝封面/目录/蓝底表头，内容与 v1.4 一致 |
+| **免安装 EXE** | `dist\RenameMaster.exe` | 单文件，49.5 MB，双击即用、无黑窗 |
+| **安装程序** | `dist\RenameMaster_Setup.exe` | 51.2 MB，桌面/开始菜单快捷方式 + 卸载入口 |
+| **PDF 使用手册** | `dist\RenameMaster_使用手册.pdf` | 0.5 MB，内容与 v1.4 一致（v1.8 无新功能） |
 | Markdown 手册 | `USER_MANUAL.md` / `.docx` / `.html` | 源文件，便于修订 |
-| 需求契约 | `PRD.md` | v1.4，F1-F22 + B1-B10 |
-| 验收清单 | `CHECKLIST.md` | v1.4，A-O 组 |
+| 需求契约 | `PRD.md` | F1-F22 + B1-B10 |
+| 验收清单 | `CHECKLIST.md` | A-O 组 |
 | 打包脚本 | `build.py` / `RenameMaster.spec` | PyInstaller 可重复打包 |
-| 安装脚本 | `installer\rename_master.iss` | Inno Setup 可重新编译 |
+| 安装脚本 | `installer\rename_master.iss` | Inno Setup 可重新编译（v1.8.0） |
 | 手册脚本 | `build_manual_pdf.py` | Word COM 生成 PDF |
-| 源码（git） | 主分支 v1.4 归档提交 | 见 `git log --oneline` 最新记录 |
+| 源码（git） | 主分支 v1.8 归档提交 | `3988733` |
 
-## 2. v1.4 修复内容（D2W 独立测试审查）
+## 2. v1.8 修复内容（全文审查）
 
-| 编号 | 修复 |
+| 级别 | 修复 |
 |---|---|
-| B1 | 模式二新名不带扩展名误判重复 → 改为基于最终完整文件名判定 |
-| B2 | 水印重名自动改名后历史与落盘不一致 → 记录实际落盘名 |
-| B3 | 超长文件名 → 预览阶段（>255 字符）即友好报错 |
-| B4 | 同名产物静默覆盖 → 自动加 `_1/_2` 后缀并告警 |
-| B5 | move + 备份顺序崩溃 → 备份移到写盘前 |
-| B6 | PNG 压缩变 JPEG 扩展名错位 → 扩展名同步 |
-| B7 | 只读文本可被编辑 → 白名单，仅放行移动/全选/复制 |
-| B8 | 平铺水印性能 → 单单元旋转 + 网格复用，1080P 14.9s→0.07s（约 213 倍） |
-| B9 | 盲水印坏图临时文件泄漏 → try/finally 清理 |
-| B10 | 预览界面冻结 → 窗口立即打开、大小后台异步回填 |
+| P0 | 水印「平铺密度 grid」布局走错分支 → 改为 `layout in ("tile","grid")` 都走平铺 |
+| P0 | 操作栏 destroy 导致切回页面崩溃 → 改 pack_forget 复用 |
+| P1 | photo.py `src_dir` 字典 key 重复 → 删除冗余 |
+| P1 | advanced.py checkbox 仍用系统样式 → 统一 ☑/☐ font=18 大方框 |
+| P2 | 盲水印提取分支空 out_dir 仍 mkdir → 提取时跳过 |
 
-另：打包时排除 OpenCV 视频模块（`opencv_videoio_ffmpeg`，本软件不处理视频），EXE 由 58.3 MB 降至 48.5 MB。
+v1.7 已有：水印页 4 布局 2×2 卡片 / 9 位置九宫格 / 真色块 swatch / 弹窗 1100×700 统一 / Treeview 撑满 / checkbox 大方框化。
 
 ## 3. 验收结果
 
 | 检查项 | 结果 |
 |---|---|
 | py_compile 全部源码 | ✅ 0 错误 |
-| smoke 测试 | ✅ 6/6 |
-| test_features4（命名高级功能） | ✅ 26/26 |
-| test_ui_features4（四命名页 UI） | ✅ 45/45 |
-| test_watermark_page（水印页） | ✅ 9/9 |
-| 盲水印嵌入/提取往返 | ✅ 文字正确还原 |
-| r1-r10 复现脚本 | ✅ 全部修复并验证 |
-| EXE 真实启动冒烟 | ✅ GUI 进程 56MB，未闪退 |
-| Inno Setup 编译 | ✅ 9.9 秒成功 |
-| 手册 PDF 视觉自检 | ✅ 封面/目录页码/表格无乱码 |
+| 水印引擎自测 | ✅ 9 位置 / 5 颜色 / 透明度 / LOGO / 平铺密度 / 印章全过 |
+| GUI 无头冒烟（7 页两轮切换） | ✅ SMOKE OK，操作栏存活 |
+| 核心引擎真实落盘（3 文件改名） | ✅ done=3/failed=0，非法字符清洗 / 序号唯一性正确 |
+| grid vs tile 输出一致性 | ✅ 23632 字节完全相等 |
+| EXE 真实启动冒烟 | ✅ 进程存活 6s 无闪退 |
+| Inno Setup 编译 | ✅ 10.7 秒成功 |
+| 版本号同步 | ✅ app.py=1.8 / iss=1.8.0 |
 | 原文件零改动 | ✅ 输出隔离 |
 
 ## 4. 已知缺口
