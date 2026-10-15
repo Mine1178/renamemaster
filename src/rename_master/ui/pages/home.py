@@ -23,7 +23,8 @@ ENTRIES = [
      "按正文开头、统一前缀序号或 Excel 对照表，给一堆 PDF 快速规范取名。",
      "pdf"),
     ("📊", "表格批量命名", T.C_INFO,
-     "一堆「新建 XLS 表.xlsx」按规则统一取名，支持 .xlsx / .xls / .csv。",
+     "一堆「新建 XLS 表.xlsx」按规则统一取名，支持 .xlsx / .xlsm / .xls / .csv；"
+     "对照表用 .xlsx / .xlsm / .csv。",
      "spreadsheet"),
     ("📄", "文档批量命名", T.C_SUCCESS,
      "Word / PDF / TXT 取正文开头自动取名，再叠加前缀与序号规则。",
@@ -117,18 +118,31 @@ def build(page: tk.Frame, app) -> None:
     # ---------- 最近使用 ----------
     recent = Card(page, "最近使用", accent=T.C_TEXT_M)
     recent.pack(fill=tk.X, pady=(0, T.S_MD))
-    last_dir = _shorten(app.cfg.get("output.last_dir", "") or "（尚无记录）")
-    last_count = app.cfg.get("output.last_count", 0) or 0
     row = tk.Frame(recent.body, bg=T.C_CARD)
     row.pack(fill=tk.X)
     vlabel(row, text="上次输出目录：", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    vlabel(row, text=last_dir, font=(T.FONT_FAMILY, T.F_BODY),
-             bg=T.C_CARD, fg=T.C_TEXT, anchor="w").pack(side=tk.LEFT)
+    dir_label = vlabel(row, text="（尚无记录）", font=(T.FONT_FAMILY, T.F_BODY),
+                       bg=T.C_CARD, fg=T.C_TEXT, anchor="w")
+    dir_label.pack(side=tk.LEFT)
     row2 = tk.Frame(recent.body, bg=T.C_CARD)
     row2.pack(fill=tk.X, pady=(T.S_XS, 0))
     vlabel(row2, text="上次批次数量：", font=(T.FONT_FAMILY, T.F_BODY),
              bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    vlabel(row2, text=f"{last_count} 个文件",
-             font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
-             bg=T.C_CARD, fg=T.C_ACCENT, anchor="w").pack(side=tk.LEFT)
+    count_label = vlabel(row2, text="0 个文件",
+                         font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
+                         bg=T.C_CARD, fg=T.C_ACCENT, anchor="w")
+    count_label.pack(side=tk.LEFT)
+
+    def refresh() -> None:
+        """重读「上次输出」配置。
+
+        首页只 build 一次，执行完一批后 cfg 已更新但标签还是旧值，
+        用户切回首页看到的是过期数据（v1.9 修复：App.show 会调用本钩子）。
+        """
+        dir_label.set_text(
+            _shorten(app.cfg.get("output.last_dir", "") or "（尚无记录）"))
+        count_label.set_text(f"{app.cfg.get('output.last_count', 0) or 0} 个文件")
+
+    page.refresh = refresh       # 供 app.show() 在切回本页时回调
+    refresh()

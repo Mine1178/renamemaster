@@ -779,7 +779,15 @@ def build(page: tk.Frame, app) -> None:
         embed = blind and not is_extract
         out_dir = Path(st["out_dir"].get().strip()) if not is_extract else None
         if out_dir is not None:
-            out_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                out_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                # 目录建不出来就当场说清楚并放弃本次执行，别让界面停在「正在处理…」
+                messagebox.showerror(
+                    "无法创建输出目录",
+                    f"输出目录无法创建：\n{out_dir}\n\n{exc}\n\n"
+                    "请换一个目录后重试（例如桌面或文档目录）。")
+                return
         suffix = _out_suffix()
 
         cancel_event = threading.Event()
@@ -926,6 +934,7 @@ def build(page: tk.Frame, app) -> None:
     page.set_source_dir = set_source_dir
     page.st = st
     page.vis_text_box = vis_text_box
+    page.hotkey_run = lambda: _open_confirm()   # Ctrl+Enter
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

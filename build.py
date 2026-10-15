@@ -8,11 +8,18 @@
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import sysconfig
 from contextlib import contextmanager
 from pathlib import Path
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except (AttributeError, ValueError):
+        pass
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -25,6 +32,11 @@ ERROR_LOG = ROOT / "inbox" / "build_error.txt"
 NAME = "RenameMaster"
 HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf", "numpy", "cv2", "pywt",
                   "blind_watermark"]
+
+# 打包机必须真的具备这些运行时依赖，否则打出来的 EXE 会「能启动但功能缺失」
+REQUIRED_MODULES = ["tkinter", "numpy", "cv2", "PIL", "openpyxl", "docx",
+                    "pypdf", "pywt", "blind_watermark", "tkinterdnd2",
+                    "PyInstaller"]
 # 整个包收集（含子模块 / 数据文件），避免动态导入漏掉
 COLLECT_ALL = ["blind_watermark"]
 
@@ -78,6 +90,63 @@ def _slim_cv2():
                 print(f"[build] 警告：恢复 {dll.name} 失败：{exc}", flush=True)
 
 
+def _check_interpreter() -> None:
+    """打包解释器自检：必须是装了全部运行依赖的正式解释器。
+
+    历史事故：被沙箱内置运行时（...\\sandbox_runtime\\...\\python.exe）接管后打包，
+    产物 Python 能跑、日志能写，但 tcl/tk 数据不全 —— 双击 EXE 后无窗口、
+    无报错、进程常驻。这里在打包前直接拦死，并给出正确的解释器路径。
+    可用环境变量 RM_BUILD_PYTHON 指定打包解释器。
+    """
+    exe = sys.executable
+    print(f"[build] 打包解释器 = {exe}（Python {sys.version.split()[0]}）",
+          flush=True)
+
+    lowered = exe.lower().replace("/", "\\")
+    for marker in ("sandbox_runtime", "\\windowsapps\\", "\\temp\\"):
+        if marker in lowered:
+            raise SystemExit(
+                f"[build] 拒绝用可疑解释器打包：{exe}\n"
+                f"        命中禁用路径片段 {marker!r}。\n"
+                f"        请改用正式解释器，例如：\n"
+                f"        $env:RM_BUILD_PYTHON='C:\\Users\\<你>\\AppData\\Local"
+                f"\\Programs\\Python\\Python314\\python.exe'\n"
+                f"        python build.py")
+
+    import importlib
+    missing = []
+    for mod in REQUIRED_MODULES:
+        try:
+            importlib.import_module(mod)
+        except Exception as exc:                     # noqa: BLE001
+            missing.append(f"{mod}（{exc}）")
+    if missing:
+        raise SystemExit(
+            "[build] 当前解释器缺少打包所需依赖，产物会缺功能：\n  - "
+            + "\n  - ".join(missing)
+            + f"\n        解释器：{exe}\n"
+            "        先在该解释器下 pip install -r requirements.txt，"
+            "或用 RM_BUILD_PYTHON 指向正确的解释器。")
+    print("[build] 依赖自检通过：", ", ".join(REQUIRED_MODULES), flush=True)
+
+
+def _python_override() -> None:
+    """RM_BUILD_PYTHON 指定打包解释器时，用它重跑本脚本。"""
+    want = os.environ.get("RM_BUILD_PYTHON", "").strip()
+    if not want:
+        return
+    want_path = Path(want)
+    if not want_path.is_file():
+        raise SystemExit(f"[build] RM_BUILD_PYTHON 指向的文件不存在：{want}")
+    if Path(sys.executable).resolve() == want_path.resolve():
+        return
+    print(f"[build] 按 RM_BUILD_PYTHON 切换到 {want_path}", flush=True)
+    env = {k: v for k, v in os.environ.items() if k != "RM_BUILD_PYTHON"}
+    proc = subprocess.run([str(want_path), str(Path(__file__).resolve()),
+                           *sys.argv[1:]], env=env)
+    raise SystemExit(proc.returncode)
+
+
 def _ensure_pyinstaller() -> None:
     """未安装 PyInstaller 时先 pip install。"""
     try:
@@ -116,6 +185,8 @@ def _build_cmd() -> list[str]:
 
 
 def main() -> int:
+    _python_override()
+    _check_interpreter()
     _ensure_pyinstaller()
     cmd = _build_cmd()
     print("[build] cwd =", SRC, flush=True)

@@ -162,12 +162,22 @@ def _anchor(img_w: int, img_h: int, text_w: int, text_h: int,
 
 
 def _base_rgba(img_bytes: bytes):
-    """字节流 → 白底 RGBA 底图（透明图先合成白底，避免转 JPEG 后透明区变黑）。"""
-    from PIL import Image
+    """字节流 → 白底 RGBA 底图（透明图先合成白底，避免转 JPEG 后透明区变黑）。
+
+    手机竖拍照片带 EXIF Orientation 标记：必须先按标记把像素转正。
+    输出统一走 `_to_jpeg` 重编码，重编码会丢掉 Orientation 标记 ——
+    若只按标记"标记"而不转正像素，照片就会躺倒（v1.9 修复）。
+    """
+    from PIL import Image, ImageOps
 
     with Image.open(io.BytesIO(img_bytes)) as img:
+        img.load()
+        upright = ImageOps.exif_transpose(img)
+        if upright is None:                       # 老版 Pillow 的兜底
+            upright = img
         return Image.alpha_composite(
-            Image.new("RGBA", img.size, (255, 255, 255, 255)), img.convert("RGBA"))
+            Image.new("RGBA", upright.size, (255, 255, 255, 255)),
+            upright.convert("RGBA"))
 
 
 def _to_jpeg(rgba) -> bytes:

@@ -34,6 +34,7 @@ FONT_FAMILY = "微软雅黑"
 NAV_WIDTH = 112
 LOGO_HEIGHT = 110
 TREE_ROW_HEIGHT = 30         # Treeview 行高（高 DPI 下不至于过密）
+SB_WIDTH = 12                # 内容区右侧竖向滚动条预留槽位（常驻，避免显隐时抖动）
 
 # ---------- 间距系统（8pt 基准）----------
 S_XS = 4

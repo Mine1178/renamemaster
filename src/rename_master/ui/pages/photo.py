@@ -15,7 +15,7 @@ from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
 
 IMAGE_FILETYPES = [("图片文件", "*.jpg *.jpeg *.png *.bmp *.heic"),
                    ("所有文件", "*.*")]
-MAP_FILETYPES = [("对照表", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
+MAP_FILETYPES = [("对照表", "*.xlsx *.xlsm *.csv"), ("所有文件", "*.*")]
 
 # (显示文案, target 取值) —— 取值是 KB 字符串，"0" 表示不压缩
 TARGET_OPTIONS = [
@@ -115,15 +115,6 @@ def build(page: tk.Frame, app) -> None:
     bar.pack(fill=tk.X, pady=(0, T.S_SM))
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
-
-    drow = tk.Frame(card1.body, bg=T.C_CARD)
-    drow.pack(fill=tk.X, pady=(T.S_XS, 0))
-    vlabel(drow, text="选择文件夹", font=(T.FONT_FAMILY, T.F_BODY),
-             bg=T.C_CARD, fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Entry(drow, textvariable=st["src_dir"], relief=tk.FLAT, bg=T.C_CARD,
-             fg=T.C_TEXT, highlightbackground=T.C_BORDER,
-             highlightthickness=1).pack(side=tk.LEFT, fill=tk.X, expand=True,
-                                        padx=(T.S_SM, 0))
 
     tree = styled_tree(card1.body, FILE_COLS, height=8)
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
@@ -302,6 +293,7 @@ def build(page: tk.Frame, app) -> None:
             filetypes=[("Excel 文件", "*.xlsx")])
         if not path:
             return
+        path = str(mapper.normalize_export_path(path))
         try:
             n = mapper.export_mapping(st["mapping"], path)
         except Exception as exc:                       # noqa: BLE001
@@ -565,11 +557,26 @@ def build(page: tk.Frame, app) -> None:
             app.set_status(f"执行中 {done}/{total}")
 
         def _worker() -> None:
-            result = renamer.execute_plan(
-                plans, out_dir, move=False, transform=_transform(target_kb),
-                progress=lambda d, t, n: app.safe_after(0, lambda: _ui(d, t, n)),
-                cancel=cancel_event.is_set)
+            try:
+                result = renamer.execute_plan(
+                    plans, out_dir, move=False, transform=_transform(target_kb),
+                    progress=lambda d, t, n: app.safe_after(0, lambda: _ui(d, t, n)),
+                    cancel=cancel_event.is_set)
+            except Exception as exc:          # 后台线程必须兜底，否则界面永久卡在执行中
+                app.safe_after(0, lambda e=exc: _crash(e))
+                return
             app.safe_after(0, lambda: _finish(result))
+
+        def _crash(exc: Exception) -> None:
+            st["cancel"] = None
+            progress.pack_forget()
+            bar_btn_cancel.config(state=tk.DISABLED)
+            bar_btn_run.config(state=tk.NORMAL)
+            bar_state.config(text="执行失败")
+            app.set_status(f"执行失败：{exc}", "error")
+            messagebox.showerror(
+                "执行失败",
+                f"执行过程中出现异常，原文件未做任何改动。\n\n{exc}")
 
         def _finish(result: dict) -> None:
             st["cancel"] = None
@@ -625,6 +632,7 @@ def build(page: tk.Frame, app) -> None:
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
     page.st = st                             # 页面状态（供测试 / 调试直接读写）
     page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
+    page.hotkey_run = lambda: _open_preview(on_confirm=_run)   # Ctrl+Enter
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

@@ -182,8 +182,21 @@ class Card(tk.Frame):
             self.bind("<Button-1>", lambda e: on_click())
             self.bind("<Enter>", lambda e: self._hover(True, accent))
             self.bind("<Leave>", lambda e: self._hover(False, accent))
+            self._click = (on_click, accent)
             self._bind_tree(self, on_click, accent)   # 子孙也要响应，否则"挡住"父事件
+            # 调用方是 `Card(...)` 之后再往 card.body 里塞内容的（见 home.py），
+            # 上面这次只能绑到已存在的子件；等一轮 idle 后补绑一次，把后加的
+            # emoji / 标题 / 描述也纳入点击区。_bind_tree 是幂等的，重复不叠加。
+            self.after_idle(self.refresh_click)
+        else:
+            self._click = None
         self.bind("<Configure>", self._on_resize)
+
+    # ---------- 点击 / hover ----------
+    def refresh_click(self) -> None:
+        """给「本次新增的」子孙补上点击跳转与 hover 高亮（可重复调用）。"""
+        if self._click is not None:
+            self._bind_tree(self, *self._click)
 
     # ---------- 折叠 ----------
     def toggle(self) -> None:
@@ -213,11 +226,20 @@ class Card(tk.Frame):
             self._desc._auto_height()
 
     def _bind_tree(self, widget, on_click, accent) -> None:
+        """递归绑定子孙的点击 / hover，幂等：同一控件只绑一次，不会叠加。"""
         for w in widget.winfo_children():
-            if isinstance(w, (tk.Frame, tk.Label)):
-                w.bind("<Button-1>", lambda e: on_click())
-                w.bind("<Enter>", lambda e: self._hover(True, accent))
-                w.bind("<Leave>", lambda e: self._hover(False, accent))
+            if not getattr(w, "_card_click_bound", False):
+                w._card_click_bound = True
+                # tk.Text 也要带上：入口卡片的 emoji / 标题 / 描述都是
+                # SelectableText(=tk.Text)，漏掉它们就会出现
+                # "点字没反应、只有点卡片空白才跳转"。
+                if isinstance(w, (tk.Frame, tk.Label, tk.Text)):
+                    # add="+" 而不是覆盖：子孙里可能已经有自己的 <Button-1>
+                    # （复选框切换、链接按钮…），覆盖式绑定会把它们悄悄吃掉。
+                    w.bind("<Button-1>", lambda e: on_click(), add="+")
+                    w.bind("<Enter>", lambda e: self._hover(True, accent), add="+")
+                    w.bind("<Leave>", lambda e: self._hover(False, accent), add="+")
+            if w.winfo_children():
                 self._bind_tree(w, on_click, accent)
 
     def _hover(self, on: bool, accent: str) -> None:
@@ -328,7 +350,11 @@ class SelectableText(tk.Text):
         self._compact = compact       # True：高度紧贴显示行数，不留底部空行
         self._wrap_word = (wrap == "word")
         if self._wrap_word:
-            width_chars, height_lines = 80, 1
+            # wrap=word 的文本块宽度交给容器（外面统一 fill=X 拉伸），
+            # 这里必须给一个"最小"的 width 字符数。旧值 80 会让 Text 向
+            # 布局管理器索要 80 字符（≈500px）的宽度，5 张首页卡片直接撑出
+            # 5654px 的网格需求 → 右侧卡片被裁（v1.9 修复）。
+            width_chars, height_lines = 1, 1
         else:
             width_chars = self._fit_width(text)
             height_lines = max(1, text.count("\n") + 1)
@@ -366,6 +392,14 @@ class SelectableText(tk.Text):
         compact：高度=显示行数，紧贴内容（用于单行居中的装饰元素）；
         否则多留一行，避免多行段落末行被裁。
         """
+        # 首次布局前 Text 只有 width=1 字符（≈10px），此时按它算行数会得到
+        # 上百行、把父容器请求高度撑爆（随后虽会收敛，但中间会闪一屏空白）。
+        # 宽度还没真正铺开时直接跳过，等真正拿到宽度后的 Configure 再算。
+        try:
+            if self.winfo_width() < 60:
+                return
+        except tk.TclError:
+            return
         self.update_idletasks()
         try:
             res = self.count("1.0", "end-1c", "displaylines")

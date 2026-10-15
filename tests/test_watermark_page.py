@@ -20,18 +20,25 @@ import tkinter as tk
 
 sys.path.insert(0, "src")
 
-from PIL import Image, ImageDraw
-
-from rename_master.ui.app import App
-from rename_master.ui.pages import watermark as wm_mod
-from rename_master.core import blind_wm, watermark as wm_core
-
-# ---------- 测试图片 ----------
+# ---------- 工作目录 + 环境隔离 ----------
+# 必须在 import rename_master 之前改写 %APPDATA%：config.manager / core.history
+# 都是在 import 期用 %APPDATA% 算出 config.json / history.json 路径的。
+# 不改的话，用例会读到用户真实 config.json ——「默认颜色=暗黄」这类断言会被
+# 用户保存过的配置污染（假失败），执行时又会把测试批次写进用户真实 history.json。
 WORK = os.path.join(tempfile.gettempdir(), "rm_wm_regress_v16")
 SRC = os.path.join(WORK, "src")
 shutil.rmtree(WORK, ignore_errors=True)
 os.makedirs(SRC, exist_ok=True)
+os.environ["APPDATA"] = os.path.join(WORK, "appdata")
+os.makedirs(os.environ["APPDATA"], exist_ok=True)
 
+from PIL import Image, ImageDraw                                     # noqa: E402
+
+from rename_master.ui.app import App                                 # noqa: E402
+from rename_master.ui.pages import watermark as wm_mod               # noqa: E402
+from rename_master.core import blind_wm, watermark as wm_core        # noqa: E402
+
+# ---------- 测试图片 ----------
 
 def make_img(path, base):
     img = Image.new("RGB", (900, 650))
@@ -75,6 +82,12 @@ def _spy(*a, **k):
     w = _orig_toplevel(*a, **k)
     extract_win["w"] = w
     return w
+
+
+# 模块级常驻 spy：页面里所有 tk.Toplevel(...) 都记进 extract_win。
+# 少了这一行，_spy 永不被调用，场景 ④ 的提取窗抓不到 →
+# poll_extract 空转到硬超时（旧版正因此「超时也算过」造成假绿）。
+tk.Toplevel = _spy
 
 
 def _set_vis_text(t: str) -> None:
@@ -121,29 +134,43 @@ def click_run():
 
     栈式 spy：把当前外层 spy 保存为外层，先用 click_run 自己的 spy 抓 confirm 弹窗；
     结束后还原为外层 spy（而非原始 tk.Toplevel），以便 worker 后续弹窗仍可被外层 spy 抓到。
+
+    注意：页面是「先 tk.Toplevel(...) 再 win.title("水印结果预览")」，构造那一刻标题还是空的，
+    所以 spy 只负责收集新建窗口，等 root.update() 之后再按标题匹配 —— 否则永远匹配不到，
+    确认弹窗不会被点，worker 不会启动，finished 永不置位，整个用例只能靠硬超时退出（假绿）。
     """
     finished.clear()
     confirm_win = {"w": None}
+    made = []
     outer_spy = tk.Toplevel
 
     def _spy(*a, **k):
         w = outer_spy(*a, **k)
-        if confirm_win["w"] is None:
-            try:
-                if w.title() == "水印结果预览":
-                    confirm_win["w"] = w
-            except tk.TclError:
-                pass
+        made.append(w)
         return w
 
     tk.Toplevel = _spy
-    find_btn(app._action_bars["watermark"], "开始执行").invoke()
-    for _ in range(10):
+    btn_run = find_btn(app._action_bars["watermark"], "开始执行")
+    if btn_run is None:
+        print("[ERROR] 找不到「开始执行」按钮")
+        tk.Toplevel = outer_spy
+        return
+    btn_run.invoke()
+    for _ in range(20):
         root.update()
+        for w in made:
+            try:
+                if w.winfo_exists() and w.title() == "水印结果预览":
+                    confirm_win["w"] = w
+                    break
+            except tk.TclError:
+                continue
         if confirm_win["w"] is not None:
             break
     if confirm_win["w"] is not None:
         click_confirm_in_dialog(confirm_win["w"])
+    else:
+        print("[ERROR] 未捕获「水印结果预览」确认弹窗（校验未通过？）")
     tk.Toplevel = outer_spy                # 还原为外层 spy（栈式），worker 后续弹窗仍可被外层 spy 抓到
 
 
@@ -196,6 +223,18 @@ def configure(i):
         st["blind_on"].set(True)
         st["blind_action"].set("extract")
         page.set_source_dir(OUT[0])                # 用场景 ① 的输出作 extract 源
+    elif i == 4:
+        # 场景 ⑤ 断言的是「4 风格 / 多行 / 预览按钮」，但也得先真实跑通一次执行，
+        # 否则 messagebox.showinfo 不会被调用、finished 不置位、poll_normal 空转到硬超时。
+        # 场景 ④ 曾清空 files 并切到 extract，这里恢复成合法的可见水印配置。
+        st["files"].clear()
+        st["vis_on"].set(True)
+        st["blind_on"].set(False)
+        st["blind_action"].set("embed")
+        st["vis_layout"].set("tile")
+        _set_vis_text("预览测试")
+        st["out_dir"].set(OUT[0])
+        page.set_source_dir(SRC)
 
 
 def verify(i):
@@ -209,8 +248,9 @@ def verify(i):
                   Image.open(out_path).size == (900, 650))
             src_img = Image.open(os.path.join(SRC, "IMG_1.jpg")).convert("RGB")
             out_img = Image.open(out_path).convert("RGB")
-            src_data = list(src_img.getdata())
-            out_data = list(out_img.getdata())
+            # 用 tobytes() 比 getdata()：后者 Pillow 12 起已弃用（Pillow 14 移除）
+            src_data = src_img.tobytes()
+            out_data = out_img.tobytes()
             diff_count = sum(1 for a, b in zip(src_data, out_data) if a != b)
             check("水印像素差异 > 1000（暗黄 0.15 生效）", diff_count > 1000,
                   f"diff={diff_count}")
@@ -249,6 +289,16 @@ def verify(i):
             # 盲水印提取在空文本/错误长度时返回的可能是空串或乱码，因此这里只能验弹窗结构 + 3 行，
             # 不能断言包含曲靖联通陈琼20261013。
             print(f"  [INFO] 提取窗内容：{vals}")
+        # 引擎端兜底：对「没有盲水印的图 / 错误长度」必须降级为未检出，
+        # 不能把 blind-watermark 的英文底层异常（fromhex ...）冒到界面
+        vis = sorted(os.listdir(OUT[0]))
+        if vis:
+            try:
+                bad = blind_wm.extract_watermark(os.path.join(OUT[0], vis[0]), 208)
+                check("无水印图提取降级为空串（不抛异常）", bad == "", repr(bad))
+            except Exception as exc:                          # noqa: BLE001
+                check("无水印图提取降级为空串（不抛异常）", False,
+                      f"{type(exc).__name__}: {exc}")
     elif i == 4:
         # v1.6 新增：默认值 + 4 风格 + 多行 + 预览按钮 + 引擎端印章 + 密度
         check("默认颜色 = 暗黄 #D4A017",
@@ -322,23 +372,9 @@ def start_cur():
     print(f"=== 配置场景{['①','②','③','④','⑤'][i]} ===")
     configure(i)
     if i == 3:
-        # 场景 ④ 也 SKIP（cv2/numpy + tkinter mainloop 并发偶发）
-        print(f"  [SKIP 场景④ UI 执行]（独立 reproduce 曾验证流程正常；"
-              "子线程 cv2 + tkinter mainloop 并发偶发，调试脚本已清理）")
-        cur[0] += 1
-        if cur[0] < N:
-            root.after(80, start_cur)
-        else:
-            root.after(80, finish_all)
-    elif i in (1, 2):
-        # 场景 ② ③ 涉及子线程 cv2 + numpy + tkinter 并发，独立 reproduce 已验证可用
-        print(f"  [SKIP 场景{['①','②','③','④','⑤'][i]} UI 执行]（独立 / 端 / UI 模块自测已通过；"
-              "子线程 cv2 + tkinter mainloop 并发偶发，调试脚本已清理）")
-        cur[0] += 1
-        if cur[0] < N:
-            root.after(80, start_cur)
-        else:
-            root.after(80, finish_all)
+        # 场景 ④：真跑提取流程，worker 完成后 _show_extract 弹窗 → poll_extract 捕获
+        click_run()
+        root.after(100, poll_extract)
     else:
         click_run()
         root.after(100, poll_normal)
@@ -363,7 +399,10 @@ def poll_extract():
             root.update()
         verify(cur[0])
         cur[0] += 1
-        root.after(80, finish_all)
+        if cur[0] < N:
+            root.after(80, start_cur)
+        else:
+            root.after(80, finish_all)
     else:
         root.after(80, poll_extract)
 
@@ -373,13 +412,14 @@ def finish_all():
     root.destroy()
 
 
-# 用 5 秒硬上限兜底，超时后强制 finish
+# 硬超时兜底：真卡住就计一次失败退出，不再「超时也算通过」造成假绿
 def _hard_timeout():
-    print("[TIMEOUT] 硬超时兜底，强制结束")
+    print("[TIMEOUT] 硬超时兜底：某场景卡住未完成，判失败")
+    results["fail"] += 1
     finish_all()
 
 root.after(150, start_cur)
-root.after(240000, _hard_timeout)
+root.after(120000, _hard_timeout)
 root.mainloop()
 
 print(f"\n=== 结果：{results['pass']} 通过，{results['fail']} 失败 ===")

@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Callable, Dict, Optional
 
 from rename_master.config.manager import ConfigManager
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "RenameMaster"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.8"
+VERSION = "1.9"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = 10
@@ -65,17 +65,34 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ---------- 布局 ----------
+    @staticmethod
+    def _fit_logo_font(nav_w: int, max_size: int = 14, min_size: int = 9):
+        """返回能塞进导航栏内宽的 Logo 字号（从大到小试探实际字宽）。"""
+        avail = max(40, int(nav_w) - 2 * T.S_XS - 6)
+        for size in range(max_size, min_size - 1, -1):
+            try:
+                f = tkfont.Font(family=T.FONT_FAMILY, size=size, weight="bold")
+                if f.measure(APP_TITLE) <= avail:
+                    return f
+            except tk.TclError:
+                break
+        return (T.FONT_FAMILY, min_size, "bold")
+
     def _build(self) -> None:
         self.df = tkfont.Font(family=T.FONT_FAMILY, size=10)
         self.root.option_add("*Font", self.df)
         self._apply_treeview_style()
 
-        # 高 DPI：tkinter 的 Frame(width=...) 是物理像素，不随 tk scaling 放大，
-        # 200% 屏上 112 逻辑 px 视觉只剩一半 → 按 fpixels 等比放大（逻辑尺寸不变）。
+        # 高 DPI：Frame(width=...) 的单位是屏幕像素（不随 tk scaling 变）。
+        # 进程 DPI-unaware 时 Tk 报 96 DPI，像素==逻辑 px，ui_scale 必须是 1.0；
+        # 只有 Tk 真的看到高 DPI（fpixels("1i") > 96）才需要手动放大。
+        # 旧实现用 /72（即把 96 DPI 也算成 1.333）会把导航栏多放大 33%，
+        # 在 200% 屏上直接吃掉内容区宽度 → 首页卡片与页面右侧被裁（v1.9 修复）。
         try:
-            self.ui_scale = max(1.0, self.root.winfo_fpixels("1i") / 72.0)
-        except (tk.TclError, ZeroDivisionError):
-            self.ui_scale = 1.0
+            _dpi = float(self.root.winfo_fpixels("1i"))
+        except (tk.TclError, ValueError, TypeError, ZeroDivisionError):
+            _dpi = 96.0
+        self.ui_scale = max(1.0, _dpi / 96.0)
 
         main = tk.Frame(self.root, bg=T.C_BG)
         main.pack(fill=tk.BOTH, expand=True)
@@ -92,7 +109,9 @@ class App:
         lf.pack_propagate(False)
         tk.Label(lf, text="◉", font=(T.FONT_FAMILY, 19),
                  bg=T.C_PRIMARY, fg=T.C_ACCENT).pack(pady=(T.S_XS, 0))
-        tk.Label(lf, text=APP_TITLE, font=(T.FONT_FAMILY, 14, "bold"),
+        # Logo 产品名：导航栏窄（112px），固定 14pt 粗体会横向溢出被裁。
+        # 按实际字宽从 14pt 逐级降到能放进 nav 内宽的最大字号（v1.9 修复）。
+        tk.Label(lf, text=APP_TITLE, font=self._fit_logo_font(nav_w),
                  bg=T.C_PRIMARY, fg=T.C_ACCENT).pack(pady=(T.S_XS, 0))
         tk.Label(lf, text=APP_SUBTITLE, font=(T.FONT_FAMILY, T.F_SM),
                  bg=T.C_PRIMARY, fg=T.C_LOGO_SUB,
@@ -128,6 +147,10 @@ class App:
         # 右侧内容区：滚动画布 + 固定操作栏
         self.content = tk.Frame(main, bg=T.C_BG)
         self.content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # pack 顺序决定分配顺序：先 pack 的控件先拿到自己的请求高度。
+        # 若先 pack 了 scroll_host(fill=BOTH,expand=True)，它会把整块空间吃光，
+        # 后 pack 的 action_host(side=BOTTOM) 只能拿到 0 高度 → 底部「预览/开始执行」
+        # 整条不可见（v1.9 修复：_mount_action_bar 用 before=self.scroll_host 插到前面）。
         self.scroll_host = tk.Frame(self.content, bg=T.C_BG)
         self.scroll_host.pack(fill=tk.BOTH, expand=True)
         self.action_host = tk.Frame(self.content, bg=T.C_BG)
@@ -143,6 +166,87 @@ class App:
             "about": self._build_about,
         }
         self.show("home")
+        self._bind_hotkeys()
+
+    # ---------- 全局快捷键 ----------
+    # 只注册三个"到哪一页都成立"的动作：打开目录 / 执行预览 / 取消或关窗。
+    # 不用 Ctrl+Z：Text 类自带 <<Undo>>，bind_all 会在类绑定之后照样触发，
+    # 一次按键既撤销文字又撤销整批文件（危险），故撤下不做快捷键。
+    def _bind_hotkeys(self) -> None:
+        try:
+            self.root.bind_all("<Control-o>", self._hotkey_open)
+            self.root.bind_all("<Control-O>", self._hotkey_open)
+            self.root.bind_all("<Control-Return>", self._hotkey_run)
+            self.root.bind_all("<Control-KP_Enter>", self._hotkey_run)
+            self.root.bind_all("<Escape>", self._hotkey_escape)
+        except tk.TclError:
+            pass
+
+    def _current_page(self) -> Optional[tk.Frame]:
+        return self.pages.get(self.cur)
+
+    def _top_dialog(self) -> Optional[tk.Toplevel]:
+        """最上层弹出窗（预览/确认/赞助等）；没有则 None。"""
+        try:
+            for w in reversed(self.root.winfo_children()):
+                if isinstance(w, tk.Toplevel) and w.winfo_exists() \
+                        and w.winfo_viewable():
+                    return w
+        except tk.TclError:
+            pass
+        return None
+
+    def _hotkey_open(self, _event=None):
+        """Ctrl+O：给当前页选源目录（各页统一走 set_source_dir，含拖入同一条路径）。"""
+        page = self._current_page()
+        setter = getattr(page, "set_source_dir", None)
+        if not callable(setter):
+            self.set_status("当前页面不需要选源目录（首页/关于页）", "warn")
+            return "break"
+        path = filedialog.askdirectory(title="选择源文件夹")
+        if path:
+            setter(path)
+        return "break"
+
+    def _hotkey_run(self, _event=None):
+        """Ctrl+Enter：等同底部「预览 / 开始执行」。"""
+        page = self._current_page()
+        run = getattr(page, "hotkey_run", None)
+        if callable(run):
+            run()
+        else:
+            self.set_status("当前页面没有可执行的动作", "warn")
+        return "break"
+
+    def _hotkey_escape(self, _event=None):
+        """Esc：优先关掉最上层弹出窗，其次取消正在跑的任务。"""
+        dlg = self._top_dialog()
+        if dlg is not None:
+            try:
+                dlg.destroy()
+            except tk.TclError:
+                pass
+            return "break"
+        if self.cancel_current():
+            return "break"
+        self.set_status("无正在执行的批次（Esc 可关弹窗 / 取消执行）")
+        return "break"
+
+    def cancel_current(self) -> bool:
+        """请求取消当前页正在执行的任务；有任务在跑返回 True。"""
+        page = self._current_page()
+        st = getattr(page, "st", None)
+        event = st.get("cancel") if isinstance(st, dict) else None
+        if st is None:
+            return False
+        try:
+            if event is not None:
+                event.set()
+                self.set_status("已请求取消，正在收尾…", "warn")
+                return True
+        except (AttributeError, tk.TclError):
+            return False
+        return False
 
     def _apply_treeview_style(self) -> None:
         """ttk 全局样式统一（Treeview / Combobox / Entry / Scrollbar / Progressbar）。"""
@@ -208,8 +312,15 @@ class App:
                                   style="RenameMaster.Vertical.TScrollbar",
                                   command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self._vsb.set)
-        self._vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # 用 grid + 固定 minsize 给滚动条留一个常驻槽位：显示/隐藏滚动条时
+        # Canvas 宽度保持不变。旧实现用 pack 做"需要才显示"，滚动条一出现
+        # Canvas 立刻变窄，页面按旧宽度铺好又得重算，实测 1280px 窗口下
+        # page_host 比 Canvas 宽 4px → 内容最右侧被硬裁（v1.9 修复）。
+        self.scroll_host.grid_rowconfigure(0, weight=1)
+        self.scroll_host.grid_columnconfigure(0, weight=1)
+        self.scroll_host.grid_columnconfigure(1, minsize=T.SB_WIDTH)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self._vsb.grid(row=0, column=1, sticky="ns")
         self.page_host = tk.Frame(self.canvas, bg=T.C_BG)
         self._page_window = self.canvas.create_window((0, 0), window=self.page_host,
                                                       anchor="nw")
@@ -258,13 +369,12 @@ class App:
             self.canvas.configure(scrollregion=self.canvas.bbox("all"))
             need = int(self.page_host.winfo_reqheight())
             vis = self.canvas.winfo_height()
+            # grid_remove 只隐藏控件本身，槽位列（minsize）依旧占位 →
+            # 无论显隐，Canvas 宽度恒定，不会来回抖动。
             if need <= vis + 4:
-                self._vsb.pack_forget()
-                self.canvas.configure(yscrollcommand="")
+                self._vsb.grid_remove()
             else:
-                self.canvas.configure(yscrollcommand=self._vsb.set)
-                if not self._vsb.winfo_ismapped():
-                    self._vsb.pack(side=tk.RIGHT, fill=tk.Y)
+                self._vsb.grid()
         except tk.TclError:
             pass
 
@@ -340,6 +450,14 @@ class App:
             p.pack_forget()
         self.pages[key].pack(fill=tk.BOTH, expand=True)
         self.cur = key
+        # 页面级刷新钩子：页面只 build 一次，像首页「最近使用」这类
+        # 会随别处执行批次而变化的数据，切回来必须重读一次配置（v1.9 修复）。
+        refresher = getattr(self.pages[key], "refresh", None)
+        if callable(refresher):
+            try:
+                refresher()
+            except tk.TclError:
+                pass
         self._flush_pending_drop()
         # 切页后回到顶部并按新页重算滚动区（否则沿用旧页高度/滚动位置）
         try:
@@ -389,7 +507,9 @@ class App:
 
     def _mount_action_bar(self) -> None:
         if self.action_host.winfo_children():
-            self.action_host.pack(fill=tk.X, side=tk.BOTTOM)
+            # before=self.scroll_host：让操作栏先于滚动区参与空间分配，保证固定可见
+            self.action_host.pack(fill=tk.X, side=tk.BOTTOM,
+                                  before=self.scroll_host)
 
     # ---------- 页面构建（延迟） ----------
     def _build_home(self) -> None:

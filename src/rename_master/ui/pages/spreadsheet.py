@@ -16,8 +16,8 @@ from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
                                       primary_button, secondary_button,
                                       styled_tree, vlabel, enable_label_copy)
 
-FILETYPES = [("表格文件", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
-MAP_FILETYPES = [("对照表", "*.xlsx *.xls *.csv"), ("所有文件", "*.*")]
+FILETYPES = [("表格文件", "*.xlsx *.xlsm *.xls *.csv"), ("所有文件", "*.*")]
+MAP_FILETYPES = [("对照表", "*.xlsx *.xlsm *.csv"), ("所有文件", "*.*")]
 FILE_COLS = [("name", "文件名", 360, "w"), ("size", "大小", 90, tk.CENTER)]
 PREVIEW_COLS = [("old", "原文件名", 260, "w"), ("new", "新文件名", 260, "w"),
                 ("size", "大小", 90, tk.CENTER), ("status", "状态", 80, tk.CENTER)]
@@ -77,7 +77,7 @@ def build(page: tk.Frame, app) -> None:
     }
 
     # ---------- ① 选择文件 ----------
-    card1 = Card(page, "① 选择文件", "添加要改名的表格文件（.xlsx / .xls / .csv）",
+    card1 = Card(page, "① 选择文件", "添加要改名的表格文件（.xlsx / .xlsm / .xls / .csv）",
                  accent=T.C_ACCENT)
     card1.pack(fill=tk.X, pady=(T.S_XS, T.S_MD))
     # 源目录输入框：既可用「选择文件夹」浏览，也可拖入文件夹自动填
@@ -262,6 +262,7 @@ def build(page: tk.Frame, app) -> None:
             filetypes=[("Excel 文件", "*.xlsx")])
         if not path:
             return
+        path = str(mapper.normalize_export_path(path))
         try:
             n = mapper.export_mapping(st["mapping"], path)
         except Exception as exc:                       # noqa: BLE001
@@ -397,11 +398,26 @@ def build(page: tk.Frame, app) -> None:
             app.set_status(f"执行中 {done}/{total}")
 
         def _worker() -> None:
-            result = renamer.execute_plan(
-                plans, out_dir, move=False,
-                progress=lambda d, t, n: app.safe_after(0, lambda: _ui(d, t, n)),
-                cancel=cancel_event.is_set)
+            try:
+                result = renamer.execute_plan(
+                    plans, out_dir, move=False,
+                    progress=lambda d, t, n: app.safe_after(0, lambda: _ui(d, t, n)),
+                    cancel=cancel_event.is_set)
+            except Exception as exc:          # 后台线程必须兜底，否则界面永久卡在执行中
+                app.safe_after(0, lambda e=exc: _crash(e))
+                return
             app.safe_after(0, lambda: _finish(result))
+
+        def _crash(exc: Exception) -> None:
+            st["cancel"] = None
+            progress.pack_forget()
+            bar_btn_cancel.config(state=tk.DISABLED)
+            bar_btn_run.config(state=tk.NORMAL)
+            bar_state.config(text="执行失败")
+            app.set_status(f"执行失败：{exc}", "error")
+            messagebox.showerror(
+                "执行失败",
+                f"执行过程中出现异常，原文件未做任何改动。\n\n{exc}")
 
         def _finish(result: dict) -> None:
             st["cancel"] = None
@@ -452,6 +468,7 @@ def build(page: tk.Frame, app) -> None:
     page.set_source_dir = set_source_dir      # 供 app.apply_drop_path 派发拖入
     page.st = st                             # 页面状态（供测试 / 调试直接读写）
     page.adv = st["adv"]                     # 高级选项（供测试 / 调试读取）
+    page.hotkey_run = lambda: _open_preview(on_confirm=_run)   # Ctrl+Enter
     bars = getattr(app, "_action_bars", None)
     if bars is None:
         bars = {}

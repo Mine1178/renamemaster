@@ -8,7 +8,7 @@ from typing import Iterable, List, Sequence
 # 图片类（照片命名页）
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".heic"}
 # 表格类（表格命名页）
-SPREADSHEET_EXTS = {".xlsx", ".xls", ".csv"}
+SPREADSHEET_EXTS = {".xlsx", ".xlsm", ".xls", ".csv"}
 # 文档类（文档命名页）
 DOCUMENT_EXTS = {".docx", ".pdf", ".txt", ".md"}
 # scan_files 默认口径（任务书 §5：图片 + 文档）

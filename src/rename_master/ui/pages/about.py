@@ -13,19 +13,24 @@ FEATURES = [
     ("统一前缀 + 序号", "位数 / 起始值 / 分隔符 / 保留扩展名均可自定义"),
     ("Excel 对照表一一改名", "重名与非法字符自动校验标色"),
     ("图片自动压缩", "二分法调 JPEG 质量，压不到再等比缩分辨率"),
-    ("照片水印", "半透明白色文字，5 位置 × 3 档字号，默认关闭"),
+    ("照片水印", "4 种布局：斜向平铺 / 九宫格 9 位置 / 印章 / 密度网格，默认关闭"),
+    ("隐形盲水印", "频域嵌入版权文字，肉眼不可见，被裁剪压缩后仍可提取取证"),
     ("拖拽支持", "拖文件夹进窗口自动填路径"),
     ("安全可追溯", "输出隔离 + 执行前预览 + 操作日志，绝不原地覆盖"),
 ]
 
 STACK = [
-    "Python 3.11",
+    # 运行期实测版本，避免写死（打包用哪个解释器就显示哪个）
+    f"Python {sys.version_info.major}.{sys.version_info.minor}"
+    f".{sys.version_info.micro}",
     "tkinter（标准库）",
     "Pillow（图片/水印）",
     "openpyxl（Excel）",
     "python-docx（Word）",
     "pypdf（PDF）",
     "tkinterdnd2（拖拽）",
+    "numpy + OpenCV（盲水印）",
+    "PyWavelets + blind-watermark（隐形水印）",
 ]
 
 

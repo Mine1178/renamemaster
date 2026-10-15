@@ -30,8 +30,19 @@ _ILLEGAL_TABLE = str.maketrans({ch: "_" for ch in ILLEGAL_CHARS})
 # 重名自动追加的后缀序列：_b、_c …（任务书 §3.1）
 _CONFLICT_SUFFIXES = [chr(c) for c in range(ord("b"), ord("z") + 1)]
 
+# Windows 保留设备名：带扩展名同样非法（NUL.txt 依旧指向 NUL 设备，写盘会失败或写进设备）
+_RESERVED_NAMES = {"con", "prn", "aux", "nul",
+                   *(f"com{i}" for i in range(1, 10)),
+                   *(f"lpt{i}" for i in range(1, 10))}
+
 MODE_PREFIX = "prefix"   # 模式一：统一前缀 + 序号
 MODE_MAP = "map"         # 模式二：一一对照
+
+
+def is_reserved_name(name: str) -> bool:
+    """是否为 Windows 保留设备名（CON/PRN/AUX/NUL/COM1-9/LPT1-9，含 `NUL.txt` 写法）。"""
+    base = str(name or "").split(".")[0].strip().lower()
+    return base in _RESERVED_NAMES
 
 
 def sanitize_name(name: str) -> str:
@@ -208,6 +219,11 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
             plan.mark_error(f"文件名过长（{len(plan.dst_name)} 字符，上限 255），请缩短基础名")
             plans.append(plan)
             continue
+        # Windows 保留设备名：CON / NUL / aux.jpg 之类系统建不出来（或会写进设备），提前拦截
+        if is_reserved_name(plan.dst_name):
+            plan.mark_error(f"“{plan.dst_name}”是 Windows 保留设备名，系统无法创建，请改名")
+            plans.append(plan)
+            continue
 
         # 重名冲突：基于「最终完整文件名」判定（扩展名已补齐）
         # - 模式二（对照表）：两个文件落到同一新名是对照表错误 → 禁止执行，提示回去修表
@@ -275,7 +291,17 @@ def execute_plan(plans: Sequence[RenamePlan],
     输出目录与任一源文件目录相同 → 该条直接标记失败跳过，绝不覆盖原文件。
     """
     out_dir = Path(output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        # 输出目录建不出来（路径含非法字符 / 父级是个文件 / 无写权限 / 盘符不存在）。
+        # 这里绝不能往外抛：四个页面都在后台线程里直接调用本函数，异常会穿透线程，
+        # 界面永远停在「正在执行…」且按钮全灰，用户只能强杀进程（v1.9 修复）。
+        logger.error("无法创建输出目录 %s: %s", out_dir, exc)
+        return {"total": len(plans), "done": 0, "failed": len(plans), "skipped": 0,
+                "cancelled": False, "output_dir": str(out_dir),
+                "errors": [f"无法创建输出目录“{out_dir}”：{exc}"],
+                "done_names": []}
     log_path = _open_log()
     total = len(plans)
     done = failed = skipped = 0
@@ -283,10 +309,14 @@ def execute_plan(plans: Sequence[RenamePlan],
     done_names: List[str] = []
     out_resolved = out_dir.resolve()
 
+    cancelled = False
     for i, plan in enumerate(plans):
         if cancel is not None and cancel():
-            skipped += 1
-            continue
+            # 用户点了「取消」：立刻收尾，剩余条目不再处理（也不写盘），全部计入 skipped。
+            # 旧实现命中后只 continue，仍会把整批走完 —— 取消 1 万张照片要等到底（v1.9 修复）。
+            cancelled = True
+            skipped += total - i
+            break
         if progress is not None:
             progress(i, total, plan.src.name)
         try:
@@ -295,6 +325,12 @@ def execute_plan(plans: Sequence[RenamePlan],
                 failed += 1
                 errors.append(f"{plan.src.name}: {plan.note}")
                 continue
+            # 保留设备名兜底：预览阶段已拦截，但对照表/外部调用仍可能塞进来。
+            # 一旦 name 是 CON/NUL/COM1…，写盘会命中设备（数据丢失）或被系统拒绝，
+            # 这里统一按失败记账，绝不静默写出（v1.9 修复）。
+            if is_reserved_name(plan.dst_name):
+                raise ValueError(
+                    f"“{plan.dst_name}”是 Windows 保留设备名，拒绝写出")
             src_dir = src.resolve().parent
             old_size = scanner.file_size(src)
 
@@ -314,15 +350,25 @@ def execute_plan(plans: Sequence[RenamePlan],
 
             # ③ 输出目录 / 防覆盖（基于最终名）
             dst = out_dir / plan.dst_name
-            if move and src_dir == out_resolved:
-                # 原地改名：目标名不得命中已存在的其他文件（防覆盖）
-                if dst.exists() and dst.resolve() != src.resolve():
+            try:
+                same_file = dst.resolve() == src.resolve()
+            except OSError:
+                same_file = False
+
+            if move:
+                if same_file:
+                    # 原地改名但新旧同名：本来不需要动，按"跳过"记账（绝不写盘）
+                    skipped += 1
+                    plan.note = "源与目标同名，无需改名"
+                    continue
+                if dst.exists():
+                    # 原地改名更要守住：目标名已被占用 → 拒绝覆盖（无论是不是同一目录）
                     raise FileExistsError(f"目标已存在，拒绝覆盖：{dst.name}")
-            elif src_dir == out_resolved and not move:
+            elif src_dir == out_resolved:
                 failed += 1
                 errors.append(f"{plan.src.name}: 输出目录与源目录相同，已跳过（拒绝原地覆盖）")
                 continue
-            elif not move and dst.exists() and dst.resolve() != src.resolve():
+            elif not same_file and dst.exists():
                 # copy / transform：目标已存在 → 自动加 _1/_2，不覆盖
                 stem_d, ext_d = dst.stem, dst.suffix
                 for k in range(1, 1000):
@@ -330,6 +376,10 @@ def execute_plan(plans: Sequence[RenamePlan],
                     if not cand.exists():
                         dst = cand
                         break
+                else:
+                    # 1~999 全部被占用：绝不能退回原名写盘（会覆盖别人的文件）→ 该条报失败
+                    raise FileExistsError(
+                        f"目标目录已有 999 个同名文件，无法自动改名：{dst.name}")
                 plan.dst_name = dst.name
                 plan.add_warning("目标已存在，已自动改名避免覆盖")
 
@@ -358,4 +408,5 @@ def execute_plan(plans: Sequence[RenamePlan],
     if progress is not None:
         progress(total, total, "完成")
     return {"total": total, "done": done, "failed": failed, "skipped": skipped,
-            "output_dir": str(out_dir), "errors": errors, "done_names": done_names}
+            "cancelled": cancelled, "output_dir": str(out_dir),
+            "errors": errors, "done_names": done_names}
