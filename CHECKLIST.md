@@ -176,6 +176,7 @@
 | R8 | 打包后 EXE 真机首页截图归档 | 人工 | ✅ `exe_home.png`（无「添加水印」，左下 v1.10.1） |
 | R9 | 水印助手源码不删除、存档待复用 | 自动 | ✅ `水印助手_存档\`（4 源文件 + sha1 + 集成点清单，不参与打包） |
 | R10 | 全量回归在重打 EXE 后再跑一轮 | 自动 | ✅ 12/12，0 失败（`docs\evidence\v1.10.1\regress_v1.10.1.txt`） |
+| R11 | 冒烟用例连跑不再有偶发假失败（夹具竞态已修） | 自动 | ✅ `t_pkg_exe` 10 轮 x 2 目标 = 20/20、`run_all` 3 轮均 12/12（`docs\evidence\v1.10.1\smoke_stability_v1.10.1.txt`） |
 
 ## 汇总
 - 自动测试：`python tests\run_all.py` —— **12 个用例全部通过，0 失败**（末轮 58.9 秒；smoke 6/6、features4 26/26、ui_features4 45/45、ui_bind 29 项、core_edges 235 项、core_extra 33 项、pkg_exe EXE+源码双态等）。

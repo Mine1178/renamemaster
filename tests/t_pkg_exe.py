@@ -236,6 +236,33 @@ def _rect(hwnd: int) -> tuple[int, int, int, int]:
     return r.left, r.top, r.right, r.bottom
 
 
+class _WINDOWPLACEMENT(ctypes.Structure):
+    _fields_ = [
+        ("length", wintypes.UINT),
+        ("flags", wintypes.UINT),
+        ("showCmd", wintypes.UINT),
+        ("ptMinPosition", wintypes.POINT),
+        ("ptMaxPosition", wintypes.POINT),
+        ("rcNormalPosition", wintypes.RECT),
+    ]
+
+
+_SHOW_CMD_NAME = {0: "hidden", 1: "normal", 2: "minimized", 3: "maximized"}
+
+
+def _placement(hwnd: int) -> str:
+    """窗口放置状态：用于区分「从未最大化」与「最大化后又被改回小窗」。"""
+    wp = _WINDOWPLACEMENT()
+    wp.length = ctypes.sizeof(_WINDOWPLACEMENT)
+    if not user32.GetWindowPlacement(hwnd, ctypes.byref(wp)):
+        return f"<GetWindowPlacement 失败 err={ctypes.get_last_error()}>"
+    n = wp.rcNormalPosition
+    return (f"showCmd={wp.showCmd}"
+            f"({_SHOW_CMD_NAME.get(int(wp.showCmd), '?')})"
+            f" normal={n.right - n.left}x{n.bottom - n.top}@({n.left},{n.top})"
+            f" flags={wp.flags}")
+
+
 def _log_tail(path: Path, lines: int = 25) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -383,25 +410,43 @@ def _smoke(target: str, wait: float) -> tuple[list[str], list[str]]:
             # 建窗早期就会把标题挂上去，但那一刻窗口还停在 (-32000,-32000) 的默认
             # 占位位置、尺寸仍是 314x50；此时调 SW_MAXIMIZE 是无效的（窗口还没
             # 变成可最大化状态），2.5 秒后量出来就是 314x50 → 源码态冒烟随机报
-            # 「窗口尺寸偏小」的假失败（v1.9 修复）。
-            # 判据：轮询到「尺寸真的到了正常窗口量级」再测量，最多等 15 秒。
+            # 「窗口尺寸偏小」的假失败（v1.9 首次修复：轮询到就绪再测量）。
+            # 【坑】夹具竞态（v1.10.1 修）：早先每 0.5 秒**无条件**发一次
+            # ShowWindow(SW_MAXIMIZE)+SetForegroundWindow，会在窗口还没进 mainloop
+            # （Tk 仍停在初始 314x50 占位几何）时反复干预，把窗口状态搅乱 ——
+            # 约 1/5 概率量出 314x50 → 报「窗口尺寸偏小」假失败（EXE 态与源码态
+            # 都复现过，而自然启动与新开窗口完全正常，属夹具自身的竞态）。
+            # 判据：先纯被动轮询，等窗口自己长到正常量级；只有超过 4 秒仍偏小
+            # 才助推一次，之后继续被动等。总预算 15 秒不变。
             settle_end = time.time() + 15
+            nudge_at = time.time() + 4
+            nudged = False
             while time.time() < settle_end:
                 left, top, right, bottom = _rect(hwnd)
                 if right - left >= 900 and bottom - top >= 600:
                     break
-                try:
-                    user32.ShowWindow(hwnd, 3)      # SW_MAXIMIZE
-                    user32.SetForegroundWindow(hwnd)
-                except Exception as exc:            # noqa: BLE001
-                    print("置前失败（不影响判定）:", exc)
+                if not nudged and time.time() >= nudge_at:
+                    nudged = True
+                    try:
+                        user32.ShowWindow(hwnd, 3)      # SW_MAXIMIZE
+                        user32.SetForegroundWindow(hwnd)
+                    except Exception as exc:            # noqa: BLE001
+                        print("置前失败（不影响判定）:", exc)
                 time.sleep(0.5)
+            # 尺寸就绪后再把窗口抬到前台一次：截图是抓屏幕区域，窗口若被别的
+            # 窗口压住就会截到别人的画面。此时被测窗口已进 mainloop，抬前台安全。
+            try:
+                user32.SetForegroundWindow(hwnd)
+            except Exception:                       # noqa: BLE001
+                pass
             time.sleep(1.5)                         # 等首屏渲染完
             left, top, right, bottom = _rect(hwnd)
             w, h = right - left, bottom - top
             print(f"窗口尺寸: {w}x{h} @ ({left},{top})")
             if w < 900 or h < 600:
                 errors.append(f"窗口尺寸偏小: {w}x{h}")
+                print(f"窗口放置状态: {_placement(hwnd)}"
+                      f"（nudged={nudged}）")
             shot = SHOT if target == "exe" else SHOT.with_name("src_smoke.png")
             ok, detail, env_blocked = _grab_shot((left, top, right, bottom), shot)
             if not ok:
