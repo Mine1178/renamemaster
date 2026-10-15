@@ -2,7 +2,7 @@
 
 Windows 桌面端工具：一键把照片 / 表格 / 文档批量改名，并在改名同时把照片压缩到指定大小（1M / 500K / 200K / 100K / 自定义）。
 
-当前版本：v1.9（2026-10-15）
+当前版本：v1.10（2026-10-15）
 
 ## 运行
 
@@ -14,11 +14,11 @@ python -m rename_master.main
 
 也可以直接双击项目根目录的 `run.bat` 一键启动。
 
-## 自测（v1.9）
+## 自测（v1.10）
 
 ```bat
 cd D:\Desktop\SD\13.Rename
-python tests\run_all.py -v    :: 13 个用例一键全量回归，末行输出「合计 13 个用例：通过 13，失败 0」
+python tests\run_all.py -v    :: 12 个用例一键全量回归，末行输出「合计 12 个用例：通过 12，失败 0」
 ```
 
 单跑某一项：`python tests\smoke.py`、`python tests\t_core_edges.py`、`python tests\t_pkg_exe.py`（打包产物真实启动冒烟）等。

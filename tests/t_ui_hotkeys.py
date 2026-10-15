@@ -39,7 +39,7 @@ from tkinterdnd2 import TkinterDnD  # noqa: E402
 import rename_master.ui.app as app_mod  # noqa: E402
 from rename_master.ui.app import App  # noqa: E402
 
-FUNC_PAGES = ["photo", "watermark", "pdf", "spreadsheet", "document"]
+FUNC_PAGES = ["photo", "pdf", "spreadsheet", "document"]
 
 
 def _iter(widget):

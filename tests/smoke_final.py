@@ -49,20 +49,6 @@ def main() -> int:
     if dead:
         errors.append(f"操作栏已销毁: {dead}")
 
-    # 验证水印页状态变量存在
-    try:
-        app.show("watermark")
-        root.update_idletasks()
-        wm_page = app.pages["watermark"]
-        st = getattr(wm_page, "st", None)
-        if st is None:
-            errors.append("水印页 st 未挂载")
-        else:
-            print("水印页 st keys:", sorted(st.keys())[:5], "...")
-    except Exception as exc:
-        errors.append(f"水印页检查: {exc}")
-        traceback.print_exc()
-
     root.destroy()
 
     if errors:

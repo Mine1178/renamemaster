@@ -5,13 +5,3 @@ openpyxl>=3.1
 python-docx>=1.1
 pypdf>=4.0
 tkinterdnd2>=0.4
-# 水印 / 盲水印（PRD §6）：盲水印走频域方案，需要 numpy + opencv + 小波 + blind-watermark
-# 注意：只装 headless 版 opencv（本软件不用 GUI 显示窗口），
-# 若同时装了 opencv-python 会与 headless 抢 cv2 包文件，务必二选一。
-# 另：blind-watermark 的元数据把依赖写死成 GUI 版 opencv-python，只装 headless 时
-# `pip check` 会报 "blind-watermark requires opencv-python"——这是上游元数据问题，
-# 运行期它只 `import cv2`，headless 已满足，可忽略（cv2.getBuildInformation() 显示 GUI: NONE 即正确）。
-numpy>=1.26,<3
-opencv-python-headless>=4.8
-PyWavelets>=1.4
-blind-watermark>=0.4.4

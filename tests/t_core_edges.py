@@ -54,11 +54,11 @@ def _jpeg(w: int = 64, h: int = 48, color=(200, 30, 30), quality: int = 95) -> b
 
 def _noisy_jpeg(w: int = 640, h: int = 480, quality: int = 95) -> bytes:
     """随机噪声图：几乎无法被压缩，用来逼出「压不到目标」的分支。"""
+    import random
     from PIL import Image
-    import numpy as np
-    arr = np.random.default_rng(7).integers(0, 256, (h, w, 3), dtype="uint8")
+    data = random.Random(7).randbytes(w * h * 3)
     buf = io.BytesIO()
-    Image.fromarray(arr, "RGB").save(buf, format="JPEG", quality=quality)
+    Image.frombytes("RGB", (w, h), data, "raw", "RGB").save(buf, format="JPEG", quality=quality)
     return buf.getvalue()
 
 

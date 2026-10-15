@@ -93,7 +93,6 @@ LEGACY: dict[str, Path] = {
     "smoke_final.py": ROOT,
     "test_features4.py": ROOT,
     "test_ui_features4.py": ROOT,
-    "test_watermark_page.py": ROOT,
     "test_dnd.py": ROOT,
     "check_layout.py": ROOT,
 }

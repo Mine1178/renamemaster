@@ -98,9 +98,7 @@ def main() -> int:
         bbox = diff.getbbox()
         changed = 0
         if bbox:
-            import numpy as np
-            arr = np.asarray(diff)
-            changed = int((arr.max(axis=2) > 12).sum())
+            changed = sum(1 for px in diff.getdata() if max(px) > 12)
         print(f"    grab1={g1.width}x{g1.height} grab2={g2.width}x{g2.height} "
               f"差异像素={changed} bbox={bbox}")
         g1.save(OUT / f"{key}.png")

@@ -11,8 +11,6 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import sysconfig
-from contextlib import contextmanager
 from pathlib import Path
 
 for _stream in (sys.stdout, sys.stderr):
@@ -30,64 +28,11 @@ WORK = ROOT / "build"
 ERROR_LOG = ROOT / "inbox" / "build_error.txt"
 
 NAME = "RenameMaster"
-HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf", "numpy", "cv2", "pywt",
-                  "blind_watermark"]
+HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf"]
 
 # 打包机必须真的具备这些运行时依赖，否则打出来的 EXE 会「能启动但功能缺失」
-REQUIRED_MODULES = ["tkinter", "numpy", "cv2", "PIL", "openpyxl", "docx",
-                    "pypdf", "pywt", "blind_watermark", "tkinterdnd2",
-                    "PyInstaller"]
-# 整个包收集（含子模块 / 数据文件），避免动态导入漏掉
-COLLECT_ALL = ["blind_watermark"]
-
-
-def _find_ffmpeg_dlls():
-    """定位当前解释器 site-packages 里 cv2 的 ffmpeg 视频 I/O DLL。
-
-    本软件只用 cv2 做图像编解码 / 绘制，不做视频读写；该 DLL 体积约 30MB，
-    排除后 EXE 从约 58MB 降到约 48MB。不在主进程 import cv2，避免 DLL 被
-    占用导致无法重命名。
-    """
-    roots = []
-    purelib = sysconfig.get_paths().get("purelib")
-    if purelib:
-        roots.append(Path(purelib))
-    roots.extend(Path(p) for p in sys.path if p)
-    found = []
-    seen = set()
-    for base in roots:
-        cv2_dir = base / "cv2"
-        if not cv2_dir.is_dir():
-            continue
-        for dll in cv2_dir.glob("opencv_videoio_ffmpeg*.dll"):
-            key = str(dll).lower()
-            if key not in seen:
-                seen.add(key)
-                found.append(dll)
-    return found
-
-
-@contextmanager
-def _slim_cv2():
-    """打包期间临时把 ffmpeg DLL 改名移出，结束后（无论成败）恢复原位。"""
-    moved = []
-    try:
-        for dll in _find_ffmpeg_dlls():
-            size_mb = dll.stat().st_size / 1024 / 1024
-            hidden = dll.with_name(dll.name + ".excluded")
-            dll.rename(hidden)
-            moved.append((dll, hidden))
-            print(f"[build] 已临时排除视频模块 {dll.name} "
-                  f"({size_mb:.1f} MB)", flush=True)
-        yield
-    finally:
-        for dll, hidden in moved:
-            try:
-                if hidden.exists() and not dll.exists():
-                    hidden.rename(dll)
-                    print(f"[build] 已恢复 {dll.name}", flush=True)
-            except OSError as exc:  # 恢复失败要明确暴露，避免环境被破坏
-                print(f"[build] 警告：恢复 {dll.name} 失败：{exc}", flush=True)
+REQUIRED_MODULES = ["tkinter", "PIL", "openpyxl", "docx", "pypdf",
+                    "tkinterdnd2", "PyInstaller"]
 
 
 def _check_interpreter() -> None:
@@ -176,8 +121,6 @@ def _build_cmd() -> list[str]:
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
-    for pkg in COLLECT_ALL:
-        cmd += ["--collect-all", pkg]
     assets = ROOT / "assets"
     if assets.is_dir():
         cmd += ["--add-data", f"{assets};assets"]
@@ -192,9 +135,8 @@ def main() -> int:
     print("[build] cwd =", SRC, flush=True)
     print("[build]", " ".join(cmd), flush=True)
 
-    with _slim_cv2():
-        proc = subprocess.run(cmd, cwd=str(SRC), capture_output=True, text=True,
-                              encoding="utf-8", errors="replace")
+    proc = subprocess.run(cmd, cwd=str(SRC), capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
     if proc.stdout:
         print(proc.stdout, flush=True)
     if proc.stderr:

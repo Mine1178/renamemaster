@@ -160,8 +160,8 @@ def _check_width(app, root, width: int, height: int = 900) -> list[str]:
                    if isinstance(w, Card) and w.bind("<Button-1>")]
     visible = [c for c in entry_cards
                if c.winfo_ismapped() and c.winfo_rootx() + c.winfo_width() <= right + TOL]
-    if len(visible) < 5:
-        problems.append(f"{width}px / home: 功能卡片只完整可见 {len(visible)}/5 张")
+    if len(visible) < 4:
+        problems.append(f"{width}px / home: 功能卡片只完整可见 {len(visible)}/4 张")
     return problems
 
 

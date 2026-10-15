@@ -16,9 +16,6 @@ ENTRIES = [
     ("📷", "照片批量命名", T.C_ACCENT,
      "统一前缀 + 序号，或按 Excel 对照表一一改名；可顺带压到 1M / 500K / 200K。",
      "photo"),
-    ("💧", "添加水印", T.C_CYAN,
-     "斜向平铺（裁不掉）或角落单处，任意颜色 + 描边；支持隐形盲水印版权溯源。",
-     "watermark"),
     ("📕", "PDF 批量命名", T.C_PURPLE,
      "按正文开头、统一前缀序号或 Excel 对照表，给一堆 PDF 快速规范取名。",
      "pdf"),
@@ -49,7 +46,7 @@ def _shorten(text: str, limit: int = 56) -> str:
 
 def build(page: tk.Frame, app) -> None:
     PageHeader(page, "文件批量命名助手",
-               "批量改名 · 图片压缩 · 添加水印 · 文档 / 表格 / PDF 一键处理")
+               "批量改名 · 图片压缩 · 文档 / 表格 / PDF 一键处理")
 
     grid = tk.Frame(page, bg=T.C_BG)
     grid.pack(fill=tk.X, pady=(T.S_XS, T.S_MD))

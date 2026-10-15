@@ -73,7 +73,7 @@ def _grab(root, path: Path) -> bool:
     img = full.crop((int(x * sx), int(y * sy),
                      int((x + w) * sx), int((y + h) * sy)))
     # 二次抓图比对：DWM 偶发把「上一帧合成画面」交给 BitBlt（v1.9 排查结论），
-    # 单次抓图会出现「watermark.png 里是 PDF 页」这种错页假象。
+    # 单次抓图可能出现「已切走的旧页面仍被截到」的错页假象。
     # 再抓一张，若两张不一致就以第二张为准（此时页面已稳定呈现）。
     time.sleep(1.0)
     full2 = ImageGrab.grab(all_screens=True)

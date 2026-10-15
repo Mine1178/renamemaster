@@ -398,7 +398,7 @@ def build(page: tk.Frame, app) -> None:
         return renamer.plan_rename(st["files"], mode, _build_rule())
 
     def _transform(target_kb: int):
-        """照片页只做压缩（水印已独立到「水印」页）。target_kb<=0 不做变换。"""
+        """照片页只做压缩，不做其它变换。target_kb<=0 不做变换。"""
         if target_kb <= 0:
             return None
 
