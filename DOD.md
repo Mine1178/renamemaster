@@ -6,8 +6,8 @@
 
 | 交付物 | 路径 | 说明 |
 |---|---|---|
-| **免安装 EXE** | `dist\RenameMaster.exe` | 单文件，51,763,608 B（49.4 MiB），双击即用、无黑窗 |
-| **安装程序** | `dist\RenameMaster_Setup.exe` | 53,461,000 B（51.0 MiB），桌面/开始菜单快捷方式 + 卸载入口 |
+| **免安装 EXE** | `dist\RenameMaster.exe` | 单文件，51,634,208 B（49.2 MiB），双击即用、无黑窗 |
+| **安装程序** | `dist\RenameMaster_Setup.exe` | 53,331,110 B（50.9 MiB），桌面/开始菜单快捷方式 + 卸载入口 |
 | **PDF 使用手册** | `dist\RenameMaster_使用手册.pdf` | 495,479 B，内容与 v1.9 一致（封面 + 目录页码 + 截图 + FAQ） |
 | Markdown 手册 | `USER_MANUAL.md` / `.docx` / `.html` | 源文件，便于修订 |
 | 需求契约 | `PRD.md` | F1-F23 + B1-B33 |
@@ -31,6 +31,13 @@
 | P2 | `tests/t_pkg_exe.py` 源码态冒烟竞态：改为轮询到窗口尺寸正常（≥900x640）再测量并重发最大化，消除「窗口尺寸偏小 314x50」假失败（B31） |
 | P1 | 表格页可选类型与对照表口径不一致：`scanner.SPREADSHEET_EXTS` 与表格页 `FILETYPES` 都漏了 `.xlsm`，宏工作簿既选不进列表也读不了 → 补齐类型集合、文件对话框与首页/表格页文案（B32） |
 | P2 | 导出对照表扩展名与内容不符：「导出 Excel」允许手输任意扩展名，`.xlsm` / `.csv` 也照写 xlsx 字节流 → 新增 `normalize_export_path` 统一落盘 `.xlsx`，并把「文件正被 Excel 占用」的 `PermissionError` 翻成中文提示，4 个页面提示文案与实际落盘名一致（B33） |
+
+### 交付环境校正（本轮）
+
+| 级别 | 处理 |
+|---|---|
+| P1 | 环境里 `opencv-python 5.0.0.93` 与 `opencv-python-headless 5.0.0.93` 双装，两者共用同一份 `cv2` 包文件互相覆盖（实测磁盘上为 GUI 版内容）→ 双卸后仅装 headless，`cv2.getBuildInformation()` 显示 `GUI: NONE`；两个 wheel 已备份到 `.cache\whl`，可随时回滚。blind-watermark 元数据把依赖写死成 GUI 版，`pip check` 会提示，已在 `requirements.txt` 注明为上游元数据问题 |
+| — | 产物按清理后的依赖环境重打：EXE 49.2 MiB / Setup 50.9 MiB，v1.9 内容不变 |
 
 ### v1.9 前序批次（B1~B26 摘要）
 
@@ -58,15 +65,16 @@ v1.7 已有：水印页 4 布局 2×2 卡片 / 9 位置九宫格 / 真色块 swa
 |---|---|
 | py_compile 全部源码 | ✅ 0 错误 |
 | `python tests\run_all.py` 全量回归 | ✅ **13/13 通过，0 失败**（约 2 分 40 秒） |
-| core_edges 核心引擎边界 | ✅ 235 项，失败 0 |
+| core_edges 核心引擎边界 | ✅ 235 项，失败 0（5.4s） |
 | core_extra 补充边界 | ✅ 33 项，失败 0 |
 | smoke / smoke_final | ✅ 6/6，GUI 7 页切换正常 |
 | test_features4 / test_ui_features4 | ✅ 26/26 / 45/45 |
 | test_watermark_page（真实检查） | ✅ 21/21（16.3s） |
 | t_ui_bind / t_ui_hotkeys / t_ui_layout | ✅ 35 项 / 快捷键全过 / 960~1440px 无溢出 |
-| t_pkg_exe 打包产物真实启动 | ✅ EXE 6.4s 出窗 2906x1730；源码态 2.1s 出窗（截图落盘） |
+| t_pkg_exe 打包产物真实启动 | ✅ EXE 4.5s 出窗 2906x1730；源码态 2.1s 出窗（截图落盘） |
 | EXE 真实启动冒烟 | ✅ 无闪退、无黑窗、图标正确 |
-| Inno Setup 编译 | ✅ 9.3 秒成功（1.9.0 / 1.9.0.0） |
+| Inno Setup 编译 | ✅ 13.0 秒成功（1.9.0 / 1.9.0.0） |
+| 依赖环境 | ✅ 仅 headless opencv（cv2 GUI: NONE），双装已清理；`.cache\whl` 存有 GUI/headless 两份 wheel 可回滚 |
 | PDF 手册重建 | ✅ Word COM FileFormat=17，495,479 B |
 | 版本号同步 | ✅ app.py=1.9 / iss=1.9.0 / 手册 V1.9 |
 | 原文件零改动 | ✅ 输出隔离 |
