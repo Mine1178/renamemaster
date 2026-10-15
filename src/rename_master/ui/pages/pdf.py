@@ -1,4 +1,4 @@
-"""PDF 批量命名页：选文件 → 命名规则（可叠加正文开头）→ 输出 → 预览 / 执行。
+﻿"""PDF 批量命名页：选文件 → 命名规则（可叠加正文开头）→ 输出 → 预览 / 执行。
 
 结构和文档页（document.py）对齐：执行前弹预览窗（含正文预览列），确认后才落盘。
 只处理 .pdf（scanner 没有 PDF_EXTS 时用本地常量 PDF_EXTS）。
@@ -37,18 +37,30 @@ def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -
                           activebackground=T.C_CARD, activeforeground=T.C_ACCENT,
                           selectcolor=T.C_CARD, highlightthickness=0,
                           font=(T.FONT_FAMILY, T.F_BODY), anchor="w", cursor="hand2")
-    enable_label_copy(w)
     return w
 
 
-def _check(master, text: str, variable: tk.Variable, command=None) -> tk.Checkbutton:
-    w = tk.Checkbutton(master, text=text, variable=variable, command=command,
-                          bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
-                          activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
-                          highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
-                          anchor="w", cursor="hand2")
-    enable_label_copy(w)
-    return w
+def _check(master, text: str, variable: tk.Variable, command=None):
+    """自定义大方框 checkbox：用 Label 模拟，☑/☐ 约 24px 便于点选。"""
+    box = tk.Frame(master, bg=T.C_CARD)
+    def _refresh():
+        mark_lbl.config(text="☑" if variable.get() else "☐")
+    def _toggle(e=None):
+        variable.set(not variable.get())
+        _refresh()
+        if command:
+            command()
+    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
+                        font=(T.FONT_FAMILY, 18), cursor="hand2")
+    mark_lbl.pack(side=tk.LEFT)
+    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
+                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
+                        cursor="hand2")
+    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
+    mark_lbl.bind("<Button-1>", _toggle)
+    text_lbl.bind("<Button-1>", _toggle)
+    box.bind("<Map>", lambda e: _refresh())
+    return box
 
 
 def build(page: tk.Frame, app) -> None:
@@ -168,7 +180,7 @@ def build(page: tk.Frame, app) -> None:
 
     # 模式一控件（与照片页对齐：基础名称独占一行，其余横向排）
     prefix_box = tk.Frame(card2.body, bg=T.C_CARD)
-    _check(prefix_box, f"☑ 用正文前 {BODY_CHARS} 字作为文件名（叠加前缀）",
+    _check(prefix_box, f"用正文前 {BODY_CHARS} 字作为文件名（叠加前缀）",
            st["use_content"]).pack(fill=tk.X, pady=(T.S_SM, 0))
 
     prow = tk.Frame(prefix_box, bg=T.C_CARD)
@@ -416,7 +428,13 @@ def build(page: tk.Frame, app) -> None:
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
         win.configure(bg=T.C_BG)
-        fit_dialog(win, 1000, 600)
+        win.update_idletasks()
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w, h = 1100, 700
+        x = max(0, (sw - w) // 2)
+        y = max(0, (sh - h) // 2)
+        win.minsize(800, 500)
+        win.geometry(f'{w}x{h}+{x}+{y}')
         head = "共 %d 个文件 → %s" % (len(plans), st["out_dir"].get())
         if st["use_content"].get():
             head += f"（正文前 {BODY_CHARS} 字）"

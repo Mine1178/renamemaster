@@ -1,8 +1,8 @@
-; RenameMaster 安装包脚本
+﻿; RenameMaster 安装包脚本
 ; 编译：iscc installer\rename_master.iss
 
 #define MyAppName "RenameMaster"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.8.0"
 #define MyAppPublisher "本地工具"
 #define MyAppExeName "RenameMaster.exe"
 
@@ -23,7 +23,7 @@ PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\assets\rename_master.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-VersionInfoVersion=1.5.0.0
+VersionInfoVersion=1.8.0.0
 VersionInfoDescription=RenameMaster 文件批量命名助手
 VersionInfoProductName=RenameMaster
 VersionInfoProductVersion={#MyAppVersion}

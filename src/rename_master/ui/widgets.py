@@ -1,4 +1,4 @@
-"""通用 UI 组件（Card / PageHeader / 按钮工厂）——照搬 Wifibond widgets.py。"""
+﻿"""通用 UI 组件（Card / PageHeader / 按钮工厂）——照搬 Wifibond widgets.py。"""
 from __future__ import annotations
 
 import tkinter as tk
@@ -475,9 +475,10 @@ def styled_tree(master, columns, height=8, show="headings") -> ttk.Treeview:
     tv = ttk.Treeview(master, columns=[c[0] for c in columns], show=show,
                       height=height, style="RenameMaster.Treeview",
                       selectmode="extended")
-    for cid, heading, width, anchor in columns:
+    for idx, (cid, heading, width, anchor) in enumerate(columns):
         tv.heading(cid, text=heading, anchor=anchor)
-        tv.column(cid, width=width, anchor=anchor, stretch=(width == 0))
+        # 第一列自动拉伸填满窗口剩余宽度，其他列固定
+        tv.column(cid, width=width, anchor=anchor, stretch=(idx == 0))
     enable_tree_copy(tv)
     return tv
 
@@ -526,11 +527,9 @@ def dialog_tree(master, columns, bg: str, height: int = 14):
                         command=tv.xview)
     tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
 
-    tv.grid(row=0, column=0, sticky="nsew")
-    vsb.grid(row=0, column=1, sticky="ns")
-    hsb.grid(row=1, column=0, sticky="ew")
-    box.rowconfigure(0, weight=1)
-    box.columnconfigure(0, weight=1)
+    vsb.pack(side=tk.RIGHT, fill=tk.Y)
+    hsb.pack(side=tk.BOTTOM, fill=tk.X)
+    tv.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
     return tv, box
 
 

@@ -1,4 +1,4 @@
-"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
+﻿"""主窗口框架：左侧深色导航 + 右侧内容区（照抄 Wifibond app.py 布局思路）。
 
 任务书 §4.1 / §4.2：
 - 左导航 112 逻辑 px、底色 #1e293b，高 DPI 下按 `winfo_fpixels("1i")/72` 放大；
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "RenameMaster"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.5"
+VERSION = "1.8"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = 10
@@ -367,12 +367,21 @@ class App:
 
     def set_action_bar(self, widget: tk.Widget) -> None:
         """页面注册底部固定操作栏（在最外层 Frame，不随内容滚动）。"""
+        # 注意：旧 bar 只 pack_forget 不 destroy——切回该页时还要复用同一个 bar，
+        # 否则下次 set_action_bar 对已 destroy 的 widget 调 pack 会 TclError。
         self.clear_action_bar()
-        widget.pack(in_=self.action_host, fill=tk.X, padx=T.S_LG, pady=(0, T.S_MD))
+        try:
+            widget.pack(in_=self.action_host, fill=tk.X,
+                        padx=T.S_LG, pady=(0, T.S_MD))
+        except tk.TclError:
+            pass
 
     def clear_action_bar(self) -> None:
         for child in list(self.action_host.winfo_children()):
-            child.destroy()
+            try:
+                child.pack_forget()
+            except tk.TclError:
+                pass
         try:
             self.action_host.pack_forget()      # 无操作栏时不占位
         except tk.TclError:

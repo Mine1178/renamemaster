@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import Card, hint_label, vlabel, enable_label_copy
+from rename_master.ui.widgets import Card, hint_label, vlabel
 
 # (内部 key, 显示文字)
 SORT_CHOICES = [
@@ -26,14 +26,28 @@ _LABEL_TO_KEY = {label: key for key, label in SORT_CHOICES}
 _KEY_TO_LABEL = {key: label for key, label in SORT_CHOICES}
 
 
-def _check(master, text: str, variable: tk.Variable) -> tk.Checkbutton:
-    w = tk.Checkbutton(master, text=text, variable=variable,
-                       bg=T.C_CARD, fg=T.C_TEXT, activebackground=T.C_CARD,
-                       activeforeground=T.C_ACCENT, selectcolor=T.C_CARD,
-                       highlightthickness=0, font=(T.FONT_FAMILY, T.F_BODY),
-                       anchor="w", cursor="hand2")
-    enable_label_copy(w)
-    return w
+def _check(master, text: str, variable: tk.Variable) -> tk.Widget:
+    """自定义大方框 checkbox：与各页面 _check 视觉一致（☑/☐ 约 24px）。"""
+    box = tk.Frame(master, bg=T.C_CARD)
+
+    def _refresh():
+        mark_lbl.config(text="☑" if variable.get() else "☐")
+
+    def _toggle(_e=None):
+        variable.set(not variable.get())
+        _refresh()
+
+    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
+                        font=(T.FONT_FAMILY, 18), cursor="hand2")
+    mark_lbl.pack(side=tk.LEFT)
+    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
+                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
+                        cursor="hand2")
+    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
+    mark_lbl.bind("<Button-1>", _toggle)
+    text_lbl.bind("<Button-1>", _toggle)
+    box.bind("<Map>", lambda e: _refresh())
+    return box
 
 
 def create_vars(app, cfg_prefix: str) -> dict:

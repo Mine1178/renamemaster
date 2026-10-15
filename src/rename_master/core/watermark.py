@@ -33,6 +33,20 @@ TEXT_FILL = (255, 255, 255, ALPHA)          # 旧默认白色填充，保留兼�
 QUALITY = 95
 LINE_GAP_RATIO = 0.4                        # 行距 = 字号 × 0.4
 
+# 平铺水印默认值（参考 2Dou/watermarker 经典：暗黄 + 0.15 透明度）
+DEFAULT_TILE_COLOR = "#D4A017"              # 暗黄（mustard / dark yellow）
+DEFAULT_TILE_OPACITY = 0.15                 # 15% 半透明，不喧宾夺主又能起到警示
+DEFAULT_TILE_ANGLE = 30                     # 斜向 30° 平铺
+DEFAULT_TILE_SIZE = 0.020                   # 字号：短边 × 0.02
+DEFAULT_TILE_SPACING = 1.0                  # 间距：中
+DEFAULT_TILE_DENSITY = 3                    # 平铺密度 N×N（3×3 = 9 张）
+
+# 印章风格默认值（firemark 风格：圆/方框 + 文字）
+DEFAULT_SEAL_SHAPE = "round"                # round / rect
+DEFAULT_SEAL_RATIO = 0.22                   # 印章外接矩形占图短边的比例
+DEFAULT_SEAL_OPACITY = 0.5
+DEFAULT_SEAL_RING_RATIO = 0.06              # 边线宽 = 短边 × 0.06
+
 # 水印文字颜色（RGB 三通道，alpha 由 opacity 决定）
 COLORS = {
     "white": (255, 255, 255),
@@ -255,7 +269,8 @@ def add_logo_watermark(img_bytes: bytes, logo_path, position: str = DEFAULT_LOGO
 def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
                        font_size_ratio: float = 0.02, color="white",
                        opacity: float = 0.3, spacing: float = 1.0,
-                       stroke: int = 0, shadow: bool = False) -> bytes:
+                       stroke: int = 0, shadow: bool = False,
+                       density: int = 0) -> bytes:
     """斜向平铺旋转文字水印：铺满全图，裁掉一块仍有残留（防盗核心）。
 
     高效实现：只旋转**单个文字单元**（小图），再按旋转网格基向量重复贴到
@@ -264,6 +279,8 @@ def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
 
     angle：旋转角度（默认 30°）；spacing：间距倍数（小=密，大=疏）；
     stroke：非 0 时给文字加深色描边；shadow：投影，复杂背景上更清晰。
+    density：N×N 平铺密度（1~6，0=按 spacing 自动）。设 density=N 后，
+    沿平铺方向的步长会被贴「短边 / N」覆盖，spacing 仅控制垂直方向的疏密。
     """
     import math
     from PIL import Image, ImageDraw
@@ -302,7 +319,12 @@ def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
     # ③ 网格基向量：u 沿文字方向，v 垂直文字方向（spacing 控制疏密）
     rad = math.radians(angle)
     cos_a, sin_a = math.cos(rad), math.sin(rad)
-    along = tw + font_size * 3.0 * float(spacing)    # 沿文字方向步长
+    if density and 1 <= int(density) <= 6:
+        # density 模式：沿平铺方向 N 等分图片短边 → 强制 N 张一行
+        n_d = int(density)
+        along = max(1.0, min(width, height) / float(n_d))
+    else:
+        along = tw + font_size * 3.0 * float(spacing)
     across = th + font_size * 5.0 * float(spacing)   # 垂直文字方向行距
     u_vec = (along * cos_a, along * sin_a)
     v_vec = (-across * sin_a, across * cos_a)
@@ -326,25 +348,111 @@ def add_tile_watermark(img_bytes: bytes, text: str, angle: float = 30,
     return _to_jpeg(Image.alpha_composite(rgba, overlay))
 
 
+def add_seal_watermark(img_bytes: bytes, text: str,
+                       shape: str = DEFAULT_SEAL_SHAPE,
+                       position: str = "bottom_right",
+                       size_ratio: float = DEFAULT_SEAL_RATIO,
+                       color: str = "#B91C1C",
+                       opacity: float = DEFAULT_SEAL_OPACITY,
+                       ring_ratio: float = DEFAULT_SEAL_RING_RATIO) -> bytes:
+    """印章风格水印（firemark 风格）：圆环/方框 + 中央文字。
+
+    形态：圆环（默认，印章"半圆形"）/ 方框（"rect"，方形印章）。
+    位置：9 个 position 同 add_watermark（默认 bottom_right）。
+    文字：单行 / 多行都支持，自动按印章外接框宽度换行缩放。
+    大小：印章外接矩形 = 短边 × size_ratio（默认 0.22，即短边 1000 → 220）。
+    边框：线宽 = 短边 × ring_ratio（默认 0.06）。
+
+    整体半透明（opacity，默认 0.5），不影响主体内容又起到版权 / 状态标记。
+    """
+    from PIL import Image, ImageDraw
+
+    if not text or not str(text).strip():
+        return img_bytes
+
+    rgba = _base_rgba(img_bytes)
+    width, height = rgba.size
+    rgb_color = _parse_color(color)
+    fill = (*rgb_color, int(round(255 * max(0.0, min(1.0, float(opacity))))))
+
+    short_side = min(width, height)
+    seal_size = max(40, int(short_side * float(size_ratio)))
+    ring_w = max(2, int(short_side * float(ring_ratio)))
+    margin = max(8, seal_size // 2)
+
+    # ① 外接框左上角
+    x0, y0 = _anchor(width, height, seal_size, seal_size, margin, position)
+    x1, y1 = x0 + seal_size, y0 + seal_size
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+
+    overlay = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # ② 边框（圆环 / 方框）
+    if shape == "rect":
+        draw.rectangle((x0 + ring_w // 2, y0 + ring_w // 2,
+                        x1 - ring_w // 2, y1 - ring_w // 2),
+                       outline=fill, width=ring_w)
+    else:
+        # round：占满方框并内切
+        draw.ellipse((x0 + ring_w // 2, y0 + ring_w // 2,
+                      x1 - ring_w // 2, y1 - ring_w // 2),
+                     outline=fill, width=ring_w)
+
+    # ③ 中央文字（多行；字号按印章宽度 1/6 自适应）
+    font_size = max(10, int(seal_size / 6))
+    font = _load_font(font_size)
+    lines = [ln for ln in str(text).split("\n") if ln.strip()] or [str(text)]
+    line_gap = max(1, int(font_size * 0.2))
+    # 测每行宽度，按最长行居中
+    boxes = [draw.textbbox((0, 0), ln, font=font) for ln in lines]
+    widths = [max(0, bx[2] - bx[0]) for bx in boxes]
+    heights = [max(0, bx[3] - bx[1]) or font_size for bx in boxes]
+    block_h = sum(heights) + line_gap * (len(lines) - 1)
+    cur = cy - block_h // 2
+    for ln, bx, w, h in zip(lines, boxes, widths, heights):
+        line_x = cx - w // 2
+        draw.text((line_x, cur - bx[1]), ln, font=font, fill=fill)
+        cur += h + line_gap
+
+    return _to_jpeg(Image.alpha_composite(rgba, overlay))
+
+
 def apply_watermark(img_bytes: bytes, *, text: str = "", layout: str = "single",
                     position: str = "bottom_right", angle: float = 30,
                     font_size_ratio: float = 0.02, color="white",
                     opacity: float = 0.4, spacing: float = 1.0,
                     stroke: int = 0, shadow: bool = False,
                     logo_path: str = "", logo_position: str = "top_left",
-                    logo_ratio: float = 0.08) -> bytes:
+                    logo_ratio: float = 0.08,
+                    density: int = 0,
+                    seal_shape: str = DEFAULT_SEAL_SHAPE,
+                    seal_size_ratio: float = DEFAULT_SEAL_RATIO,
+                    seal_ring_ratio: float = DEFAULT_SEAL_RING_RATIO) -> bytes:
     """统一水印入口（新页面调用）。
 
-    layout：single=按 position 角落单处；tile=斜向平铺（angle/spacing）。
+    layout：
+    - single = 按 position 角落单处；
+    - tile   = 斜向平铺（angle/spacing/density）；
+    - seal   = 印章风格（圆/方框 + 文字，firemark 风格）；
     文字与 LOGO 可叠加；无任何水印内容时原样返回。
+
+    density：仅 tile 有效，N×N（1~6，0=按 spacing 自动）；
+    seal_shape/seal_size_ratio/seal_ring_ratio：仅 seal 有效。
     """
     data = img_bytes
     if text and str(text).strip():
-        if layout == "tile":
+        # tile 与 grid 都走平铺渲染：grid 只是 UI 上的别称（强制 N×N 密度）
+        if layout in ("tile", "grid"):
             data = add_tile_watermark(
                 data, text, angle=angle, font_size_ratio=font_size_ratio,
                 color=color, opacity=opacity, spacing=spacing,
-                stroke=stroke, shadow=shadow)
+                stroke=stroke, shadow=shadow, density=density)
+        elif layout == "seal":
+            data = add_seal_watermark(
+                data, text, shape=seal_shape, position=position,
+                size_ratio=seal_size_ratio, color=color, opacity=opacity,
+                ring_ratio=seal_ring_ratio)
         else:
             data = add_watermark(
                 data, text, position=position,
@@ -469,3 +577,41 @@ if __name__ == "__main__":
     print(f"9 位置 {POSITIONS}")
     print(f"5 颜色 {tuple(COLORS)} + 透明度 0/0.4/1.0 均正常")
     print(f"多行模板 {multi!r} + LOGO 叠加（透明底 PNG）正常")
+
+    # ⑦ v1.6 新增：平铺密度 1×1~6×6 + 印章风格
+    for d in (1, 2, 3, 4, 5, 6):
+        out_d = add_tile_watermark(src_bytes, "密度测试", density=d)
+        assert out_d and out_d != src_bytes, f"density={d} 未生效"
+    (out_dir / "wm_tile_density.jpg").write_bytes(out_d)
+
+    # 印章：圆 / 方框 / 9 位置 / 默认暗黄 0.15（参考 2Dou 经典）
+    for shape in ("round", "rect"):
+        out_s = add_seal_watermark(src_bytes, "已审核\n发布",
+                                    shape=shape, position="bottom_right")
+        assert out_s and out_s != src_bytes, f"seal {shape} 未生效"
+        (out_dir / f"wm_seal_{shape}.jpg").write_bytes(out_s)
+    for pos in POSITIONS:
+        assert add_seal_watermark(src_bytes, "已审核", position=pos), pos
+
+    # 2Dou 经典配色验证（暗黄 + 0.15）
+    classic = add_tile_watermark(src_bytes, "曲靖联通", color="#D4A017",
+                                 opacity=0.15, density=3)
+    assert classic and classic != src_bytes
+    (out_dir / "wm_classic.jpg").write_bytes(classic)
+
+    # apply_watermark 入口：layout="seal" + density=3
+    out_seal = apply_watermark(src_bytes, text="测试印章\n2026-10-14",
+                                layout="seal", position="bottom_right")
+    assert out_seal and out_seal != src_bytes
+    (out_dir / "wm_apply_seal.jpg").write_bytes(out_seal)
+    out_density = apply_watermark(src_bytes, text="N×N 平铺",
+                                   layout="tile", density=3,
+                                   color="#D4A017", opacity=0.15)
+    assert out_density and out_density != src_bytes
+    (out_dir / "wm_apply_density.jpg").write_bytes(out_density)
+
+    # 空文字不应改变图像
+    assert apply_watermark(src_bytes, text="", layout="seal") == src_bytes
+    assert apply_watermark(src_bytes, text="   ", layout="tile") == src_bytes
+
+    print(f"v1.6 新增：平铺密度 1-6 + 印章（圆/方）/ 9 位置 + 默认暗黄 0.15 全部通过")
