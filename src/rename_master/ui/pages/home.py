@@ -100,9 +100,27 @@ def build(page: tk.Frame, app) -> None:
 
     state = {"cols": 0}
 
+    def _balanced_cols(cols: int) -> int:
+        """末行只剩 1 张卡时降一档列数，避免右侧大片留白。
+
+        v1.10 去掉「添加水印」后功能卡从 5 张变 4 张，宽屏 3 列会排成 3+1
+        （第二行只占 1/3 宽，右边 2/3 空着）。降到 2 列即 2+2，饱满且等高。
+        5 张卡是 3+2，末行 2 张不算孤卡，仍保持 3 列（v1.9 观感不变）。
+        """
+        cols = max(1, min(cols, len(cards)))
+        while cols > 1:
+            rows = -(-len(cards) // cols)
+            lonely_last = (rows >= 2 and len(cards) - (rows - 1) * cols == 1)
+            if lonely_last and len(cards) % (cols - 1) == 0:
+                cols -= 1
+            else:
+                break
+        return cols
+
     def _on_resize(event=None) -> None:
         width = grid.winfo_width() or _WIDE_MIN
         cols = 3 if width >= _WIDE_MIN else (2 if width >= _MID_MIN else 1)
+        cols = _balanced_cols(cols)
         if cols != state["cols"]:
             state["cols"] = cols
             _relayout(cols)

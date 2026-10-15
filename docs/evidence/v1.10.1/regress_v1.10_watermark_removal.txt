@@ -1,0 +1,620 @@
+﻿=== t_core_edges.py =============================================
+① sanitize_name / 文件名合法性
+② plan_rename 不变量（ok 计划必须是合法 Windows 文件名）
+③ execute_plan 防覆盖 / 隔离 / 取消
+④ compressor 边界
+⑤ mapper 对照表解析
+⑥ history 撤销安全
+⑦ config 健壮性
+
+=== 检查 235 项，失败 0 项（4.1s）===
+执行失败 CON.jpg: “CON.jpg”是 Windows 保留设备名，拒绝写出
+压缩预估失败 C:\Users\11782\AppData\Local\Temp\rm_cmp_l23w5u_u\bad.jpg: cannot identify image file <_io.BytesIO object at 0x0000024183E29850>
+对照表解析失败 C:\Users\11782\AppData\Local\Temp\rm_map_533omslu\bad.xlsx: File is not a zip file
+对照表解析失败 C:\Users\11782\AppData\Local\Temp\rm_map_533omslu\x.txt: 不支持的对照表格式：.txt（支持 .xlsx / .xlsm / .csv）
+对照表解析失败 C:\Users\11782\AppData\Local\Temp\rm_map_533omslu\old.xls: 不支持老式 .xls 对照表（这是 2003 版二进制格式）：请在 Excel / WPS 里「另存为 .xlsx」后再导入。
+--> PASS (4.4s)
+=== t_core_extra.py =============================================
+核心引擎补充边界用例（v1.9）
+① execute_plan：输出目录建不出来时必须结构化失败（不许抛）
+② mapper：合并表头 / 公式单元格 / 多工作表
+③ history：重启软件后仍能撤销上一批
+④ 拖放路径解析（DND_FILES 原始串）
+⑤ compressor：零字节 / 缺失文件不得让预览崩
+⑥ config：存不下来也不许抛
+
+=== 检查 33 项，失败 0 项 ===
+无法创建输出目录 C:\Users\11782\AppData\Local\Temp\rm_outbad_x97lphxh\blocked\sub\out: [WinError 183] 当文件已存在时，无法创建该文件。: 'C:\\Users\\11782\\AppData\\Local\\Temp\\rm_outbad_x97lphxh\\blocked'
+无法创建输出目录 C:\Users\11782\AppData\Local\Temp\rm_outbad_x97lphxh\blocked\sub\out: [WinError 183] 当文件已存在时，无法创建该文件。: 'C:\\Users\\11782\\AppData\\Local\\Temp\\rm_outbad_x97lphxh\\blocked'
+压缩预估失败 C:\Users\11782\AppData\Local\Temp\rm_cmpx_g8jpvmk3\zero.jpg: cannot identify image file <_io.BytesIO object at 0x0000020D4B1CAF20>
+压缩预估失败 C:\Users\11782\AppData\Local\Temp\rm_cmpx_g8jpvmk3\nope.jpg: [Errno 2] No such file or directory: 'C:\\Users\\11782\\AppData\\Local\\Temp\\rm_cmpx_g8jpvmk3\\nope.jpg'
+--> PASS (2.3s)
+=== t_pkg_exe.py ================================================
+
+########## 冒烟目标：exe ##########
+启动 D:\Desktop\SD\13.Rename\dist\RenameMaster.exe ...
+出窗耗时: 4.2s
+窗口标题: 'RenameMaster · 文件批量命名助手'
+窗口尺寸: 2906x1730 @ (-13,-13)
+截图已保存: D:\Desktop\SD\13.Rename\inbox\exe_smoke.png (2906x1730)
+=== [exe] 冒烟通过：窗口正常出现、尺寸正常 （截图已落盘） ===
+
+########## 冒烟目标：src ##########
+启动 源码态应用（C:\Users\11782\AppData\Local\Programs\Python\Python314\python.exe） ...
+出窗耗时: 2.1s
+窗口标题: 'RenameMaster · 文件批量命名助手'
+窗口尺寸: 2906x1730 @ (-13,-13)
+截图已保存: D:\Desktop\SD\13.Rename\inbox\src_smoke.png (2906x1730)
+=== [src] 冒烟通过：窗口正常出现、尺寸正常 （截图已落盘） ===
+
+============================================================
+冒烟结果：通过
+2026-10-15 22:34:35,653 INFO rename_master.main: RenameMaster ����
+2026-10-15 22:34:35,722 INFO rename_master.main: �汾 1.10��Python 3.14.4
+--> PASS (11.6s)
+=== t_ui_bind.py ================================================
+
+① 首页入口卡片：点文字也能跳转
+  [ok]   找到「照片批量命名」入口卡片
+  [ok]   「照片批量命名」卡片含 emoji/标题/描述文字块（实得 3）
+  [ok]   「照片批量命名」点文字块 → 跳到 photo（实际 photo）
+  [ok]   「照片批量命名」点文字块 → 跳到 photo（实际 photo）
+  [ok]   「照片批量命名」点文字块 → 跳到 photo（实际 photo）
+  [ok]   找到「PDF 批量命名」入口卡片
+  [ok]   「PDF 批量命名」卡片含 emoji/标题/描述文字块（实得 3）
+  [ok]   「PDF 批量命名」点文字块 → 跳到 pdf（实际 pdf）
+  [ok]   「PDF 批量命名」点文字块 → 跳到 pdf（实际 pdf）
+  [ok]   「PDF 批量命名」点文字块 → 跳到 pdf（实际 pdf）
+  [ok]   找到「表格批量命名」入口卡片
+  [ok]   「表格批量命名」卡片含 emoji/标题/描述文字块（实得 3）
+  [ok]   「表格批量命名」点文字块 → 跳到 spreadsheet（实际 spreadsheet）
+  [ok]   「表格批量命名」点文字块 → 跳到 spreadsheet（实际 spreadsheet）
+  [ok]   「表格批量命名」点文字块 → 跳到 spreadsheet（实际 spreadsheet）
+  [ok]   找到「文档批量命名」入口卡片
+  [ok]   「文档批量命名」卡片含 emoji/标题/描述文字块（实得 3）
+  [ok]   「文档批量命名」点文字块 → 跳到 document（实际 document）
+  [ok]   「文档批量命名」点文字块 → 跳到 document（实际 document）
+  [ok]   「文档批量命名」点文字块 → 跳到 document（实际 document）
+
+② 子件绑定不被覆盖 / ③ refresh_click 幂等
+  [ok]   测试卡片已映射（否则点击事件会被 Tk 丢掉，是假失败）
+  [ok]   复选框自己的切换回调存活（实得 1 次）
+  [ok]   重复 refresh_click 后卡片跳转只触发一次（实得 1 次）
+  [ok]   点卡片空白处触发跳转（实得 1 次）
+
+④ 页面内输入框变量不重复
+  [ok]   home 页无重复变量
+  [ok]   photo 页无重复变量
+  [ok]   pdf 页无重复变量
+  [ok]   spreadsheet 页无重复变量
+  [ok]   document 页无重复变量
+
+============================================================
+共 29 项检查，失败 0 项。
+--> PASS (8.2s)
+=== t_ui_hotkeys.py =============================================
+
+快捷键与首页刷新检查全部通过。
+--> PASS (6.1s)
+=== t_ui_layout.py ==============================================
+环境：screen=1440x900 fpixels(1i)=96.0 ui_scale=1.000 tk_scaling=1.333
+导航宽度=112px
+--- 窗口 1440px ---
+  OK
+--- 窗口 1280px ---
+  OK
+--- 窗口 1100px ---
+  OK
+--- 窗口 1000px ---
+  OK
+--- 窗口 960px ---
+  OK
+
+布局检查全部通过。
+--> PASS (10.0s)
+=== [legacy] smoke.py ===========================================
+[1/5] 已生成 3 张测试图 → C:\Users\11782\AppData\Local\Temp\renamemaster_smoke_al8ck0nk\源照片
+[2/5] plan_rename 通过：['测试_001.jpg', '测试_002.jpg', '测试_003.jpg']
+[3/5] execute_plan 通过：3 个文件 → C:\Users\11782\AppData\Local\Temp\renamemaster_smoke_al8ck0nk\输出
+      测试_001.jpg: 49.6 KB ✓
+      测试_002.jpg: 49.7 KB ✓
+      测试_003.jpg: 49.7 KB ✓
+[4/5] 非法字符替换 / 原目录零改动 通过
+[5/5] mapper.load_mapping 通过：2 条对照 → ['场景照.jpg', '近景照.jpg', 'IMG_20261012_003.jpg']
+[6/6] doc_extract.extract_title 通过：'这是一份测试文档的开头内容，后面还有很多很多字……'
+SMOKE OK
+--> PASS (1.9s)
+=== [legacy] smoke_final.py =====================================
+
+SMOKE OK: 全部页面两轮切换无异常，操作栏存活
+--> PASS (5.2s)
+=== [legacy] test_features4.py ==================================
+== ① 日期 / 变量 ==
+  [PASS] 父文件夹变量 {parent}
+  [PASS] 今天日期变量 {date}
+  [PASS] 修改时间变量 {mtime}
+  [PASS] 无EXIF时 {exif} 回退修改时间
+  [PASS] 无EXIF文件 exif_datetime 返回 None
+  [PASS] 原名变量 {stem}
+== ② 排序 ==
+  [PASS] 文件名升序顺序
+  [PASS] 文件名降序首文件为 c
+  [PASS] 按大小升序首文件为 a
+  [PASS] 按大小降序首文件为 c
+  [PASS] 按修改时间升序
+== ③ 查找替换（普通 + 正则） ==
+  [PASS] 普通文本替换
+  [PASS] 替换后被替换串消失
+  [PASS] 正则捕获组替换
+  [PASS] 非法正则安全降级
+  [PASS] 非法正则产生警告
+  [PASS] 替换为空不报错
+== ④ 撤销 Undo ==
+  [PASS] 执行成功 3 个
+  [PASS] 生成文件真实存在
+  [PASS] 最近批次已记录
+  [PASS] 批次记录页面
+  [PASS] 撤销删除 3 个文件
+  [PASS] 撤销后文件已不存在
+  [PASS] 撤销后历史移除
+  [PASS] 空输出目录已清理
+  [PASS] 无历史时返回 None
+
+=== 结果：26 通过，0 失败 ===
+--> PASS (0.7s)
+=== [legacy] test_ui_features4.py ===============================
+
+=== photo ===
+  [PASS] 高级选项变量已挂载
+  [PASS] 变量 sort_by 存在
+  [PASS] 变量 sort_desc 存在
+  [PASS] 变量 find 存在
+  [PASS] 变量 repl 存在
+  [PASS] 变量 use_regex 存在
+  [PASS] 排序下拉存在
+  [PASS] 撤销按钮存在
+  [PASS] rule 含排序
+  [PASS] rule 含查找替换
+  [PASS] 降序首文件为 gamma
+
+=== pdf ===
+  [PASS] 高级选项变量已挂载
+  [PASS] 变量 sort_by 存在
+  [PASS] 变量 sort_desc 存在
+  [PASS] 变量 find 存在
+  [PASS] 变量 repl 存在
+  [PASS] 变量 use_regex 存在
+  [PASS] 排序下拉存在
+  [PASS] 撤销按钮存在
+  [PASS] rule 含排序
+  [PASS] rule 含查找替换
+  [PASS] 降序首文件为 gamma
+
+=== spreadsheet ===
+  [PASS] 高级选项变量已挂载
+  [PASS] 变量 sort_by 存在
+  [PASS] 变量 sort_desc 存在
+  [PASS] 变量 find 存在
+  [PASS] 变量 repl 存在
+  [PASS] 变量 use_regex 存在
+  [PASS] 排序下拉存在
+  [PASS] 撤销按钮存在
+  [PASS] rule 含排序
+  [PASS] rule 含查找替换
+  [PASS] 降序首文件为 gamma
+
+=== document ===
+  [PASS] 高级选项变量已挂载
+  [PASS] 变量 sort_by 存在
+  [PASS] 变量 sort_desc 存在
+  [PASS] 变量 find 存在
+  [PASS] 变量 repl 存在
+  [PASS] 变量 use_regex 存在
+  [PASS] 排序下拉存在
+  [PASS] 撤销按钮存在
+  [PASS] rule 含排序
+  [PASS] rule 含查找替换
+  [PASS] 降序首文件为 gamma
+  [PASS] App 提供 undo_last_batch
+
+=== 结果：45 通过，0 失败 ===
+--> PASS (4.2s)
+=== [legacy] test_dnd.py ========================================
+[1/4] 大括号 / 尾斜杠清理通过：D:\test
+[2/4] 多路径（含空格）拆分通过：['D:\\照片\\in box', 'D:\\照片\\b.jpg']
+[3/4] 源目录折算通过：C:\Users\11782\AppData\Local\Temp\renamemaster_dnd_l6e9b140\相册
+[4/4] on_drop 派发通过：page=C:\Users\11782\AppData\Local\Temp\renamemaster_dnd_l6e9b140\拖入测试 | status=已拖入: C:\Users\11782\AppData\Local\Temp\renamemaster_dnd_l6e9b140\拖入测试
+     首页拖入暂存通过：pending_drop_path=C:\Users\11782\AppData\Local\Temp\renamemaster_dnd_l6e9b140\首页拖入
+DND OK
+--> PASS (0.3s)
+=== [legacy] check_layout.py ====================================
+
+============================================================
+页面: photo
+============================================================
+Frame (!frame2) req=906x1150 
+  Frame (!pageheader) req=17x128 
+    Text (!selectabletext) req=17x72 
+    Text (!selectabletext2) req=9x42 
+    Frame (!frame) req=1x2 
+  Frame (!card) req=564x506 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=538x404 
+      Frame (!frame) req=339x43 
+        Text (!selectabletext) req=40x19 
+        Entry (!entry) req=166x25 
+        Button (!button) req=117x43 📂 选择文件夹
+      Frame (!frame2) req=182x43 
+        Button (!button) req=104x43 ➕ 添加文件
+        Button (!button2) req=78x43 🗑 清空
+      Treeview (!treeview) req=534x281 
+        Menu (!menu) req=141x82 
+      TScrollbar (!scrollbar) req=4x8 
+      Text (!selectabletext) req=91x17 
+  Frame (!frame) req=874x236 
+    Frame (!card) req=429x229 
+      Frame (!frame) req=1x4 
+      Text (!selectabletext) req=90x22 
+      Text (!selectabletext2) req=8x38 
+      Frame (!frame2) req=403x127 
+        Frame (!frame) req=379x28 
+          Radiobutton (!radiobutton) req=167x28 模式一：统一前缀+序号
+          Radiobutton (!radiobutton2) req=188x28 模式二：一一对照（Excel）
+        Frame (!frame2) req=403x99 
+          Frame (!frame) req=230x25 
+            Text (!selectabletext) req=56x19 
+            Entry (!entry) req=166x25 
+          Frame (!frame2) req=403x37 
+            Text (!selectabletext) req=32x19 
+            Menubutton (!optionmenu) req=61x35 
+              Menu (menu) req=32x71 
+            Text (!selectabletext2) req=32x19 
+            Spinbox (!spinbox) req=48x23 
+            Text (!selectabletext3) req=40x19 
+            Menubutton (!optionmenu2) req=61x35 
+              Menu (menu) req=30x94 
+            Frame (!frame) req=105x37 
+              Label (!label) req=30x37 ☑
+              Label (!label2) req=71x25 保留扩展名
+          Text (!selectabletext) req=112x17 
+        Frame (!frame3) req=494x297 
+          Frame (!frame) req=494x43 
+            Button (!button) req=130x43 📥 从 Excel 导入
+            Button (!button2) req=143x43 🔍 一键提取文件名
+            Button (!button3) req=113x43 💾 导出 Excel
+            Text (!selectabletext) req=84x17 
+          Treeview (!treeview) req=304x221 
+            Menu (!menu) req=141x82 
+          TScrollbar (!scrollbar) req=4x8 
+          Text (!selectabletext) req=266x17 
+    Frame (!card2) req=269x236 
+      Frame (!frame) req=1x4 
+      Text (!selectabletext) req=140x22 
+      Text (!selectabletext2) req=8x38 
+      Frame (!frame2) req=243x134 
+        Frame (!frame) req=237x56 
+          Radiobutton (!radiobutton) req=66x28 不压缩
+          Radiobutton (!radiobutton2) req=60x28 1 MB
+          Radiobutton (!radiobutton3) req=71x28 500 KB
+          Radiobutton (!radiobutton4) req=71x28 200 KB
+          Radiobutton (!radiobutton5) req=71x28 100 KB
+          Radiobutton (!radiobutton6) req=66x28 自定义
+        Frame (!frame2) req=243x25 
+          Entry (!entry) req=54x25 
+          Text (!selectabletext) req=16x19 
+          Text (!selectabletext2) req=161x17 
+        Frame (!frame3) req=96x37 
+          Label (!label) req=30x37 ☑
+          Label (!label2) req=62x25 保留 EXIF
+  Frame (!card2) req=178x51 
+    Frame (!frame) req=1x4 
+    Frame (!frame2) req=152x29 
+      Text (!selectabletext) req=130x22 
+      Button (!button) req=22x29 ▶
+    Text (!selectabletext) req=8x19 
+    Frame (!frame3) req=602x107 
+      Frame (!frame) req=265x37 
+        Text (!selectabletext) req=32x19 
+        TCombobox (!combobox) req=175x31 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 降序
+      Frame (!frame2) req=418x37 
+        Text (!selectabletext) req=32x19 
+        Entry (!entry) req=134x25 
+        Text (!selectabletext2) req=40x19 
+        Entry (!entry2) req=134x25 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 正则
+      Text (!selectabletext) req=602x17 
+  Frame (!card3) req=278x145 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=252x43 
+      Frame (!frame) req=252x43 
+        Entry (!entry) req=166x25 
+        Button (!button) req=78x43 📁 浏览
+
+============================================================
+页面: spreadsheet
+============================================================
+Frame (!frame3) req=516x1143 
+  Frame (!pageheader) req=17x128 
+    Text (!selectabletext) req=17x72 
+    Text (!selectabletext2) req=9x42 
+    Frame (!frame) req=1x2 
+  Frame (!card) req=484x506 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=458x404 
+      Frame (!frame) req=339x43 
+        Text (!selectabletext) req=40x19 
+        Entry (!entry) req=166x25 
+        Button (!button) req=117x43 📂 选择文件夹
+      Frame (!frame2) req=182x43 
+        Button (!button) req=104x43 ➕ 添加文件
+        Button (!button2) req=78x43 🗑 清空
+      Treeview (!treeview) req=454x281 
+        Menu (!menu) req=141x82 
+      TScrollbar (!scrollbar) req=4x8 
+      Text (!selectabletext) req=91x17 
+  Frame (!card2) req=429x229 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=403x127 
+      Frame (!frame) req=379x28 
+        Radiobutton (!radiobutton) req=167x28 模式一：统一前缀+序号
+        Radiobutton (!radiobutton2) req=188x28 模式二：一一对照（Excel）
+      Frame (!frame2) req=403x99 
+        Frame (!frame) req=230x25 
+          Text (!selectabletext) req=56x19 
+          Entry (!entry) req=166x25 
+        Frame (!frame2) req=403x37 
+          Text (!selectabletext) req=32x19 
+          Menubutton (!optionmenu) req=61x35 
+            Menu (menu) req=32x71 
+          Text (!selectabletext2) req=32x19 
+          Spinbox (!spinbox) req=48x23 
+          Text (!selectabletext3) req=40x19 
+          Menubutton (!optionmenu2) req=61x35 
+            Menu (menu) req=30x94 
+          Frame (!frame) req=105x37 
+            Label (!label) req=30x37 ☑
+            Label (!label2) req=71x25 保留扩展名
+        Text (!selectabletext) req=112x17 
+      Frame (!frame3) req=494x297 
+        Frame (!frame) req=494x43 
+          Button (!button) req=130x43 📥 从 Excel 导入
+          Button (!button2) req=143x43 🔍 一键提取文件名
+          Button (!button3) req=113x43 💾 导出 Excel
+          Text (!selectabletext) req=84x17 
+        Treeview (!treeview) req=304x221 
+          Menu (!menu) req=141x82 
+        TScrollbar (!scrollbar) req=4x8 
+        Text (!selectabletext) req=266x17 
+  Frame (!card3) req=178x51 
+    Frame (!frame) req=1x4 
+    Frame (!frame2) req=152x29 
+      Text (!selectabletext) req=130x22 
+      Button (!button) req=22x29 ▶
+    Text (!selectabletext) req=8x19 
+    Frame (!frame3) req=602x107 
+      Frame (!frame) req=265x37 
+        Text (!selectabletext) req=32x19 
+        TCombobox (!combobox) req=175x31 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 降序
+      Frame (!frame2) req=418x37 
+        Text (!selectabletext) req=32x19 
+        Entry (!entry) req=134x25 
+        Text (!selectabletext2) req=40x19 
+        Entry (!entry2) req=134x25 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 正则
+      Text (!selectabletext) req=602x17 
+  Frame (!card4) req=278x145 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=252x43 
+      Frame (!frame) req=252x43 
+        Entry (!entry) req=166x25 
+        Button (!button) req=78x43 📁 浏览
+
+============================================================
+页面: document
+============================================================
+Frame (!frame4) req=639x1188 
+  Frame (!pageheader) req=17x128 
+    Text (!selectabletext) req=17x72 
+    Text (!selectabletext2) req=9x42 
+    Frame (!frame) req=1x2 
+  Frame (!card) req=484x506 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=458x404 
+      Frame (!frame) req=339x43 
+        Text (!selectabletext) req=40x19 
+        Entry (!entry) req=166x25 
+        Button (!button) req=117x43 📂 选择文件夹
+      Frame (!frame2) req=182x43 
+        Button (!button) req=104x43 ➕ 添加文件
+        Button (!button2) req=78x43 🗑 清空
+      Treeview (!treeview) req=454x281 
+        Menu (!menu) req=141x82 
+      TScrollbar (!scrollbar) req=4x8 
+      Text (!selectabletext) req=91x17 
+  Frame (!card2) req=607x274 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=581x172 
+      Frame (!frame) req=379x28 
+        Radiobutton (!radiobutton) req=167x28 模式一：统一前缀+序号
+        Radiobutton (!radiobutton2) req=188x28 模式二：一一对照（Excel）
+      Frame (!frame2) req=581x144 
+        Frame (!frame) req=272x37 
+          Label (!label) req=30x37 ☑
+          Label (!label2) req=238x25 用正文前 30 字作为文件名（叠加前缀）
+        Frame (!frame2) req=230x25 
+          Text (!selectabletext) req=56x19 
+          Entry (!entry) req=166x25 
+        Frame (!frame3) req=403x37 
+          Text (!selectabletext) req=32x19 
+          Menubutton (!optionmenu) req=61x35 
+            Menu (menu) req=32x71 
+          Text (!selectabletext2) req=32x19 
+          Spinbox (!spinbox) req=48x23 
+          Text (!selectabletext3) req=40x19 
+          Menubutton (!optionmenu2) req=61x35 
+            Menu (menu) req=30x94 
+          Frame (!frame) req=105x37 
+            Label (!label) req=30x37 ☑
+            Label (!label2) req=71x25 保留扩展名
+        Text (!selectabletext) req=581x17 
+      Frame (!frame3) req=494x297 
+        Frame (!frame) req=494x43 
+          Button (!button) req=130x43 📥 从 Excel 导入
+          Button (!button2) req=143x43 🔍 一键提取文件名
+          Button (!button3) req=113x43 💾 导出 Excel
+          Text (!selectabletext) req=84x17 
+        Treeview (!treeview) req=304x221 
+          Menu (!menu) req=141x82 
+        TScrollbar (!scrollbar) req=4x8 
+        Text (!selectabletext) req=266x17 
+  Frame (!card3) req=178x51 
+    Frame (!frame) req=1x4 
+    Frame (!frame2) req=152x29 
+      Text (!selectabletext) req=130x22 
+      Button (!button) req=22x29 ▶
+    Text (!selectabletext) req=8x19 
+    Frame (!frame3) req=602x107 
+      Frame (!frame) req=265x37 
+        Text (!selectabletext) req=32x19 
+        TCombobox (!combobox) req=175x31 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 降序
+      Frame (!frame2) req=418x37 
+        Text (!selectabletext) req=32x19 
+        Entry (!entry) req=134x25 
+        Text (!selectabletext2) req=40x19 
+        Entry (!entry2) req=134x25 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 正则
+      Text (!selectabletext) req=602x17 
+  Frame (!card4) req=278x145 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=252x43 
+      Frame (!frame) req=252x43 
+        Entry (!entry) req=166x25 
+        Button (!button) req=78x43 📁 浏览
+
+============================================================
+页面: pdf
+============================================================
+Frame (!frame5) req=625x1188 
+  Frame (!pageheader) req=17x128 
+    Text (!selectabletext) req=17x72 
+    Text (!selectabletext2) req=9x42 
+    Frame (!frame) req=1x2 
+  Frame (!card) req=484x506 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=458x404 
+      Frame (!frame) req=339x43 
+        Text (!selectabletext) req=40x19 
+        Entry (!entry) req=166x25 
+        Button (!button) req=117x43 📂 选择文件夹
+      Frame (!frame2) req=182x43 
+        Button (!button) req=104x43 ➕ 添加文件
+        Button (!button2) req=78x43 🗑 清空
+      Treeview (!treeview) req=454x281 
+        Menu (!menu) req=141x82 
+      TScrollbar (!scrollbar) req=4x8 
+      Text (!selectabletext) req=91x17 
+  Frame (!card2) req=593x274 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=567x172 
+      Frame (!frame) req=379x28 
+        Radiobutton (!radiobutton) req=167x28 模式一：统一前缀+序号
+        Radiobutton (!radiobutton2) req=188x28 模式二：一一对照（Excel）
+      Frame (!frame2) req=567x144 
+        Frame (!frame) req=272x37 
+          Label (!label) req=30x37 ☑
+          Label (!label2) req=238x25 用正文前 30 字作为文件名（叠加前缀）
+        Frame (!frame2) req=230x25 
+          Text (!selectabletext) req=56x19 
+          Entry (!entry) req=166x25 
+        Frame (!frame3) req=403x37 
+          Text (!selectabletext) req=32x19 
+          Menubutton (!optionmenu) req=61x35 
+            Menu (menu) req=32x71 
+          Text (!selectabletext2) req=32x19 
+          Spinbox (!spinbox) req=48x23 
+          Text (!selectabletext3) req=40x19 
+          Menubutton (!optionmenu2) req=61x35 
+            Menu (menu) req=30x94 
+          Frame (!frame) req=105x37 
+            Label (!label) req=30x37 ☑
+            Label (!label2) req=71x25 保留扩展名
+        Text (!selectabletext) req=567x17 
+      Frame (!frame3) req=494x297 
+        Frame (!frame) req=494x43 
+          Button (!button) req=130x43 📥 从 Excel 导入
+          Button (!button2) req=143x43 🔍 一键提取文件名
+          Button (!button3) req=113x43 💾 导出 Excel
+          Text (!selectabletext) req=84x17 
+        Treeview (!treeview) req=304x221 
+          Menu (!menu) req=141x82 
+        TScrollbar (!scrollbar) req=4x8 
+        Text (!selectabletext) req=266x17 
+  Frame (!card3) req=178x51 
+    Frame (!frame) req=1x4 
+    Frame (!frame2) req=152x29 
+      Text (!selectabletext) req=130x22 
+      Button (!button) req=22x29 ▶
+    Text (!selectabletext) req=8x19 
+    Frame (!frame3) req=602x107 
+      Frame (!frame) req=265x37 
+        Text (!selectabletext) req=32x19 
+        TCombobox (!combobox) req=175x31 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 降序
+      Frame (!frame2) req=418x37 
+        Text (!selectabletext) req=32x19 
+        Entry (!entry) req=134x25 
+        Text (!selectabletext2) req=40x19 
+        Entry (!entry2) req=134x25 
+        Frame (!frame) req=42x37 
+          Label (!label) req=6x37 
+          Label (!label2) req=32x25 正则
+      Text (!selectabletext) req=602x17 
+  Frame (!card4) req=278x145 
+    Frame (!frame) req=1x4 
+    Text (!selectabletext) req=90x22 
+    Text (!selectabletext2) req=8x38 
+    Frame (!frame2) req=252x43 
+      Frame (!frame) req=252x43 
+        Entry (!entry) req=166x25 
+        Button (!button) req=78x43 📁 浏览
+--> PASS (3.6s)
+
+====================================================================
+合计 12 个用例：通过 12，失败 0
