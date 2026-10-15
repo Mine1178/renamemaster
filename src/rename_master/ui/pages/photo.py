@@ -11,7 +11,8 @@ from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
                                       dialog_tree, fit_dialog, hint_label,
                                       primary_button, secondary_button,
-                                      styled_tree, vlabel, enable_label_copy)
+                                      refit_tree, styled_tree, vlabel,
+                                      enable_label_copy)
 
 IMAGE_FILETYPES = [("图片文件", "*.jpg *.jpeg *.png *.bmp *.heic"),
                    ("所有文件", "*.*")]
@@ -116,7 +117,8 @@ def build(page: tk.Frame, app) -> None:
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
 
-    tree = styled_tree(card1.body, FILE_COLS, height=8)
+    # flex="name"：勾选列贴紧内容，多余宽度给文件名列（否则 ☑ 与文件名之间留大片空白）
+    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name")
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
                         style="RenameMaster.Vertical.TScrollbar",
                         command=tree.yview)
@@ -133,6 +135,7 @@ def build(page: tk.Frame, app) -> None:
             tree.insert("", "end", values=("☑", p.name,
                                            scanner.fmt_size(scanner.file_size(p)),
                                            scanner.image_size(p)))
+        refit_tree(tree)
         count_label.config(text=f"已选择 {len(st['files'])} 个文件")
         if st["files"] and not st["out_dir"].get().strip():
             st["out_dir"].set(str(renamer.default_output_dir(st["files"])))
@@ -237,7 +240,8 @@ def build(page: tk.Frame, app) -> None:
     map_label.pack(side=tk.LEFT, padx=T.S_SM)
 
     map_tree = styled_tree(map_box, [("src", "原文件名", 150, "w"),
-                                     ("dst", "新文件名", 150, "w")], height=6)
+                                     ("dst", "新文件名", 150, "w")], height=6,
+                           flex="dst")
     map_vsb = ttk.Scrollbar(map_box, orient="vertical",
                             style="RenameMaster.Vertical.TScrollbar",
                             command=map_tree.yview)
@@ -266,6 +270,7 @@ def build(page: tk.Frame, app) -> None:
         map_tree.delete(*map_tree.get_children())
         for k, v in mapper.mapping_rows(mapping):
             map_tree.insert("", "end", values=(k, v))
+        refit_tree(map_tree)
         map_label.config(text=f"已导入 {len(mapping)} 条对照（{Path(path).name}）")
         app.set_status(f"对照表已导入 {len(mapping)} 条", "ok")
 
@@ -279,6 +284,7 @@ def build(page: tk.Frame, app) -> None:
         for p in st["files"]:
             st["mapping"][p.name] = ""     # 新文件名留空
             map_tree.insert("", "end", values=(p.name, ""))
+        refit_tree(map_tree)
         map_label.config(text=f"已提取 {len(st['files'])} 个文件名（新文件名待填写）")
         app.set_status(f"已提取 {len(st['files'])} 个文件名到对照表", "ok")
 
@@ -467,7 +473,7 @@ def build(page: tk.Frame, app) -> None:
         calc_status = vlabel(win, text="", font=(T.FONT_FAMILY, T.F_SM),
                              bg=T.C_BG, fg=T.C_TEXT_M, anchor="w")
         calc_status.pack(fill=tk.X, padx=T.S_LG, pady=(0, T.S_XS))
-        tv, _tbox = dialog_tree(win, PREVIEW_COLS, T.C_BG)
+        tv, _tbox = dialog_tree(win, PREVIEW_COLS, T.C_BG, flex="new")
         tv.tag_configure("ok", foreground=STATUS_COLOR["ok"])
         tv.tag_configure("warn", foreground=STATUS_COLOR["warn"])
         tv.tag_configure("error", foreground=STATUS_COLOR["error"])
@@ -482,6 +488,7 @@ def build(page: tk.Frame, app) -> None:
                                     "计算中…", mark),
                             tags=(plan.status,))
             row_ids.append(iid)
+        refit_tree(tv)
 
         blocked = [p for p in plans if p.blocked]
         if blocked:
@@ -517,6 +524,7 @@ def build(page: tk.Frame, app) -> None:
         def _done_status():
             try:
                 calc_status.config(text="✓ 压缩后大小已全部计算完成")
+                refit_tree(tv)
             except tk.TclError:
                 pass
 

@@ -500,20 +500,142 @@ def hint_label(master, text: str, *, selectable: bool = True) -> tk.Widget:
                     bg=T.C_CARD, fg=T.C_TEXT_L, anchor="w", justify=tk.LEFT)
 
 
-def styled_tree(master, columns, height=8, show="headings") -> ttk.Treeview:
+# ---------- Treeview 列宽：按内容自适应 + 剩余宽度铺满容器 ----------
+_AUTOFIT_SAMPLE = 400      # 量列宽时最多采样多少行（超长列表避免每次 resize 全量测量）
+_AUTOFIT_PAD = 22          # 单元格左右留白 + 边框 / 排序箭头余量（px）
+
+
+def _style_font(widget, style_name: str, fallback: str = "TkDefaultFont") -> tkfont.Font:
+    """取某个 ttk 样式实际生效的字体；查不到时退回 Tk 默认字体。"""
+    spec = ""
+    try:
+        spec = widget.tk.call("ttk::style", "lookup", style_name, "-font") or ""
+    except tk.TclError:
+        pass
+    for candidate in (spec, fallback):
+        if not candidate:
+            continue
+        try:
+            return tkfont.Font(root=widget, font=candidate)
+        except tk.TclError:
+            continue
+    return tkfont.nametofont("TkDefaultFont", root=widget)
+
+
+def _content_widths(tv: ttk.Treeview, cols: list[str], font, head_font) -> dict:
+    """量出每列「标题 + 采样行内容」所需宽度（px，已含留白）。"""
+    need = {}
+    for cid in cols:
+        head = str(tv.heading(cid).get("text") or "")
+        need[cid] = int(head_font.measure(head)) + _AUTOFIT_PAD
+    for iid in tv.get_children()[:_AUTOFIT_SAMPLE]:
+        for cid in cols:
+            text = tv.set(iid, cid)
+            if text:
+                w = int(font.measure(text)) + _AUTOFIT_PAD
+                if w > need[cid]:
+                    need[cid] = w
+    return need
+
+
+def autofit_columns(tv: ttk.Treeview, flex: str | None = None, min_w: int = 48,
+                    floors: dict | None = None, content: dict | None = None,
+                    fonts: tuple | None = None) -> None:
+    """重算 Treeview 列宽：每列贴合内容，剩余宽度全给 flex 列。
+
+    - 每列宽 = max(标题, 采样行内容) 的像素宽 + 留白 —— 窄内容不再占一大片空白；
+    - floors：调用方给的参考最小宽度（列 id → px），保证数据少时也不至于挤成一条；
+    - 容器比内容宽 → 差额全部给 flex 列，表格铺满整个区域，右侧不留空白；
+    - 容器比内容窄 → 先压 flex 列，再等比压其它列，都压到 min_w 为止
+      （再不够就让 Treeview 自己裁剪/滚动，不会把列压成 0）。
+    content / fonts 是给 autofit_tree 复用的量宽缓存与字体对象，可直接省略。
+    """
+    cols = list(tv["columns"])
+    if not cols:
+        return
+    if flex not in cols:
+        flex = cols[0]
+    floors = floors or {}
+    if not fonts:
+        fonts = (_style_font(tv, "RenameMaster.Treeview"),
+                 _style_font(tv, "RenameMaster.Treeview.Heading"))
+    if content is None:
+        content = {}
+    if not content:
+        content.update(_content_widths(tv, cols, fonts[0], fonts[1]))
+
+    need = {cid: max(int(content.get(cid, 0)), int(floors.get(cid, min_w)), min_w)
+            for cid in cols}
+    avail = int(tv.winfo_width())
+    total = sum(need.values())
+    if avail <= 1:            # 布局还没完成：先按内容给宽，<Configure> 时再补齐
+        avail = total
+    if avail > total:
+        need[flex] += avail - total
+    elif avail < total:
+        over = total - avail
+        cut = min(over, max(0, need[flex] - min_w))
+        need[flex] -= cut
+        over -= cut
+        slack = {c: max(0, need[c] - min_w) for c in cols if c != flex}
+        room = sum(slack.values())
+        if over > 0 and room > 0:
+            over = min(over, room)
+            for cid, free in slack.items():
+                if free:
+                    need[cid] -= int(round(over * free / room))
+    for cid in cols:
+        tv.column(cid, width=int(need[cid]), minwidth=min_w, stretch=False)
+
+
+def refit_tree(tv: ttk.Treeview) -> None:
+    """数据变化后重算列宽（flex / 参考宽度由 styled_tree 记在控件上）。"""
+    cfg = getattr(tv, "_rm_autofit", None)
+    if not cfg:
+        return
+    cfg["content"] = {}          # 行内容变了，量宽缓存作废
+    autofit_columns(tv, **cfg)
+
+
+def autofit_tree(tv: ttk.Treeview, flex: str | None = None, min_w: int = 48,
+                 floors: dict | None = None) -> None:
+    """让 Treeview 列宽随内容自适应、并随容器宽度铺满（含窗口缩放）。"""
+    cfg = {"flex": flex, "min_w": min_w, "floors": floors or {}, "content": {},
+           "fonts": (_style_font(tv, "RenameMaster.Treeview"),
+                     _style_font(tv, "RenameMaster.Treeview.Heading"))}
+    tv._rm_autofit = cfg                     # type: ignore[attr-defined]
+    last = {"w": -1}
+
+    def _on_configure(event) -> None:
+        if event.width == last["w"]:         # 同一宽度重复触发时不必重量
+            return
+        last["w"] = event.width
+        autofit_columns(tv, **cfg)
+
+    tv.bind("<Configure>", _on_configure, add="+")
+    autofit_columns(tv, **cfg)
+
+
+def styled_tree(master, columns, height=8, show="headings",
+                flex: str | None = None) -> ttk.Treeview:
     """统一风格的 Treeview（样式由 App._apply_treeview_style 注册）。
 
-    columns: [(列 id, 标题, 宽度, 对齐), ...]
+    columns: [(列 id, 标题, 参考宽度, 对齐), ...]
+    列宽交给 autofit_tree 动态算：内容多宽就多宽，剩余宽度全给 flex 列
+    （默认第一列），因此表格始终铺满容器、不留空白大列；columns 里的宽度
+    只作为该列的参考最小宽度。数据变化后调用 refit_tree(tv) 重新贴合内容。
     自动带右键菜单 + Ctrl+C 复制。
     """
     tv = ttk.Treeview(master, columns=[c[0] for c in columns], show=show,
                       height=height, style="RenameMaster.Treeview",
                       selectmode="extended")
-    for idx, (cid, heading, width, anchor) in enumerate(columns):
+    floors = {}
+    for cid, heading, width, anchor in columns:
         tv.heading(cid, text=heading, anchor=anchor)
-        # 第一列自动拉伸填满窗口剩余宽度，其他列固定
-        tv.column(cid, width=width, anchor=anchor, stretch=(idx == 0))
+        tv.column(cid, width=width, anchor=anchor, stretch=False)
+        floors[cid] = int(width)
     enable_tree_copy(tv)
+    autofit_tree(tv, flex=flex, floors=floors)
     return tv
 
 
@@ -540,11 +662,13 @@ def fit_dialog(win, width: int = 960, height: int = 600,
     return win
 
 
-def dialog_tree(master, columns, bg: str, height: int = 14):
+def dialog_tree(master, columns, bg: str, height: int = 14,
+                flex: str | None = None):
     """带「垂直 + 水平」滚动条的 Treeview，返回 (tv, 外层容器)。
 
     - 纵向滚动：文件多时上下查看；
     - 横向滚动：文件名长、列总宽超过窗口时左右查看，完整显示文件名；
+    - 列宽按内容自适应并铺满容器（flex 列吃掉剩余宽度，默认第一列）；
     - 外层容器已 pack(fill=BOTH, expand=True)，调用方无需再 pack tv；
     - 内容超出可视区时由 Treeview 自身滚动，高度由外层弹窗自适应，
       不会把底部按钮栏挤出窗口。
@@ -552,7 +676,7 @@ def dialog_tree(master, columns, bg: str, height: int = 14):
     box = tk.Frame(master, bg=bg)
     box.pack(fill=tk.BOTH, expand=True, padx=T.S_LG, pady=(0, T.S_SM))
 
-    tv = styled_tree(box, columns, height=height)
+    tv = styled_tree(box, columns, height=height, flex=flex)
     vsb = ttk.Scrollbar(box, orient="vertical",
                         style="RenameMaster.Vertical.TScrollbar",
                         command=tv.yview)

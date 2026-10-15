@@ -9,6 +9,7 @@
 1. 任一已映射控件的右边缘不得超出内容区（Canvas）右边缘；
 2. 注册了操作栏的页面，操作栏必须可见且高度 > 0；
 3. 首页 5 张功能入口卡片必须全部落在内容区内。
+4. 页面内已映射的表格，列宽合计必须正好等于表格宽度（铺满界面且不横向溢出）。
 
 用法：python tests/t_ui_layout.py            # 默认 1440 宽
       python tests/t_ui_layout.py 1280 1100  # 指定多档窗口宽度
@@ -97,6 +98,39 @@ def _iter(widget):
         yield from _iter(child)
 
 
+def _table_issues(page) -> list[str]:
+    """已映射表格的列宽合计必须正好铺满表格宽度（既不留空白也不横向溢出）。
+
+    v1.10.1 用户反馈：照片页「添加文件」表格里 ☑ 与文件名之间留了一大片空白
+    （首列被拉伸吃满宽度）。现在列宽由 widgets.autofit 按内容算、剩余宽度只给
+    flex 列，这条断言把"铺满且不溢出"钉成数字，防止回归。
+    """
+    from tkinter import ttk
+    issues: list[str] = []
+    for w in _iter(page):
+        if not isinstance(w, ttk.Treeview) or not w.winfo_ismapped():
+            continue
+        cols = list(w["columns"])
+        width = w.winfo_width()
+        if not cols or width <= 1:
+            continue
+        total = sum(int(w.column(c, "width")) for c in cols)
+        if total > width + TOL:
+            issues.append(f"{_path(w)}：列宽合计 {total} 超出表格宽度 {width}"
+                          f"（横向溢出 {total - width}px）")
+        elif width - total > TOL:
+            issues.append(f"{_path(w)}：列宽合计 {total}，表格宽 {width}，"
+                          f"右侧空 {width - total}px（未铺满界面）")
+        # 复选标记列只有一个 ☑ 字符，绝不该被拉成几百像素的空白列
+        for cid in cols:
+            head = str(w.heading(cid).get("text") or "").strip()
+            if head in ("☑", "☐") and int(w.column(cid, "width")) > 80:
+                issues.append(f"{_path(w)}：勾选列「{cid}」宽 "
+                              f"{w.column(cid, 'width')}px（应 ≤80px，"
+                              f"多余宽度要给文件名列）")
+    return issues
+
+
 def _check_width(app, root, width: int, height: int = 900) -> list[str]:
     problems: list[str] = []
     try:
@@ -130,6 +164,11 @@ def _check_width(app, root, width: int, height: int = 900) -> list[str]:
                 f"page_host={app.page_host.winfo_width()} "
                 f"scrollbar={'显示' if app._vsb.winfo_ismapped() else '隐藏'}］：")
             problems.extend(f"    · {b}" for b in bad[:6])
+
+        # 表格列宽：铺满且不溢出（v1.10.1 用户反馈回归点）
+        for issue in _table_issues(page):
+            problems.append(f"{width}px / {key}（{name}）表格列宽异常：")
+            problems.append(f"    · {issue}")
 
         # 操作栏：该页注册了 bar 就必须看得见
         if app.action_host.winfo_children():
