@@ -179,7 +179,7 @@ def _report_fatal(title: str, exc: BaseException) -> None:
     path = _write_crash_log(f"{title}\n\n{detail}")
     hint = f"\n\n详细堆栈已写入：\n{path}" if path else ""
     _show_fatal(
-        f"RenameMaster - {title}",
+        f"重命名大师 - {title}",
         f"{title}：{exc}\n\n"
         f"请把上面这行信息（或下面的日志文件）反馈给开发者。{hint}",
     )

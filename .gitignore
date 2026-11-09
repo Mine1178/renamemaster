@@ -16,3 +16,9 @@ _*.png
 .vscode/
 .preview/
 *.egg-info/
+
+# 本地工作日志 / 临时探针 / 打包备份（不进公开仓库）
+.workbuddy/
+inbox/_*
+build_bak_*/
+fallback_self_review.py

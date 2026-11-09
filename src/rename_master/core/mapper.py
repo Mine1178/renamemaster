@@ -156,12 +156,14 @@ def _decode_bytes(raw: bytes) -> str:
     3. 其余先按 UTF-8 严格解，失败再退 GBK（中文 Excel 的 ANSI 另存）；
     4. 全都不行才用替换字符兜底，保证不抛异常。
     """
+    # 必须按 BOM 长度降序：UTF-32LE 的 FFFE0000 以 UTF-16LE 的 FFFE 开头，
+    # 先判 UTF-16 会把 UTF-32 文件解成乱码。
     for bom, enc in (
+        (codecs.BOM_UTF32_LE, "utf-32"),
+        (codecs.BOM_UTF32_BE, "utf-32"),
         (codecs.BOM_UTF8, "utf-8-sig"),
         (codecs.BOM_UTF16_LE, "utf-16"),
         (codecs.BOM_UTF16_BE, "utf-16"),
-        (codecs.BOM_UTF32_LE, "utf-32"),
-        (codecs.BOM_UTF32_BE, "utf-32"),
     ):
         if raw.startswith(bom):
             try:

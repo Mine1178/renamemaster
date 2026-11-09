@@ -9,7 +9,8 @@ from tkinter import filedialog, messagebox, ttk
 from rename_master.core import (compressor, history, mapper, renamer, scanner)
 from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
-                                      dialog_tree, fit_dialog, hint_label,
+                                      checkbox as _check, dialog_tree,
+                                      fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       refit_tree, styled_tree, vlabel,
                                       enable_label_copy)
@@ -47,27 +48,7 @@ def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -
     return w
 
 
-def _check(master, text: str, variable: tk.Variable, command=None):
-    """自定义大方框 checkbox：用 Label 模拟，☑/☐ 约 24px 便于点选。"""
-    box = tk.Frame(master, bg=T.C_CARD)
-    def _refresh():
-        mark_lbl.config(text="☑" if variable.get() else "☐")
-    def _toggle(e=None):
-        variable.set(not variable.get())
-        _refresh()
-        if command:
-            command()
-    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
-                        font=(T.FONT_FAMILY, 18), cursor="hand2")
-    mark_lbl.pack(side=tk.LEFT)
-    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
-                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
-                        cursor="hand2")
-    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
-    mark_lbl.bind("<Button-1>", _toggle)
-    text_lbl.bind("<Button-1>", _toggle)
-    box.bind("<Map>", lambda e: _refresh())
-    return box
+
 
 
 def build(page: tk.Frame, app) -> None:
@@ -118,7 +99,8 @@ def build(page: tk.Frame, app) -> None:
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
 
     # flex="name"：勾选列贴紧内容，多余宽度给文件名列（否则 ☑ 与文件名之间留大片空白）
-    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name")
+    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name",
+                       on_delete=lambda indices: _remove_selected(indices))
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
                         style="RenameMaster.Vertical.TScrollbar",
                         command=tree.yview)
@@ -180,6 +162,15 @@ def build(page: tk.Frame, app) -> None:
         st["src_dir"].set("")
         _refresh_tree()
         app.set_status("已清空文件列表")
+
+    def _remove_selected(indices) -> None:
+        """右键删除：只把选中行移出待改名列表，不改动磁盘文件。"""
+        if not indices:
+            return
+        for idx in reversed(indices):
+            del st["files"][idx]
+        _refresh_tree()
+        app.set_status(f"已从列表移除 {len(indices)} 个文件（磁盘文件未改动）")
 
     # ---------- ② 命名模式 / ③ 压缩：并排两列（缩短页面纵向长度） ----------
     mid = tk.Frame(page, bg=T.C_BG)
@@ -449,10 +440,19 @@ def build(page: tk.Frame, app) -> None:
         return val
 
     def _open_preview(on_confirm=None) -> None:
+        if app.is_busy():
+            app.set_status("正在执行中，请等待当前批次完成", "warn")
+            return
+        if app._top_dialog() is not None:
+            app.set_status("已有预览窗口打开，请先关闭或确认", "warn")
+            return
         if not _validate():
             return
         target_kb = _target_kb()
         plans = _make_plans()
+        # 快照输出目录：预览窗是非模态的，打开期间用户仍可改动输入框；
+        # 确认执行必须用预览里展示的那个目录，不能现场重读。
+        out_dir = Path(st["out_dir"].get().strip())
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
         win.configure(bg=T.C_BG)
@@ -463,7 +463,7 @@ def build(page: tk.Frame, app) -> None:
         y = max(0, (sh - h) // 2)
         win.minsize(800, 500)
         win.geometry(f'{w}x{h}+{x}+{y}')
-        vlabel(win, text=f"共 {len(plans)} 个文件 → {st['out_dir'].get()}"
+        vlabel(win, text=f"共 {len(plans)} 个文件 → {out_dir}"
                            f"（压缩目标：{target_kb or '不压缩'}"
                            f"{' KB' if target_kb else ''}）",
                  font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
@@ -505,7 +505,7 @@ def build(page: tk.Frame, app) -> None:
         def _confirm():
             stop_est.set()
             win.destroy()
-            on_confirm(plans, target_kb)
+            on_confirm(plans, target_kb, out_dir)
 
         dialog_buttons(win, T.C_BG, _close,
                        on_confirm=_confirm if on_confirm is not None else None)
@@ -528,16 +528,28 @@ def build(page: tk.Frame, app) -> None:
             except tk.TclError:
                 pass
 
+        def _est_failed(exc):
+            try:
+                calc_status.config(text=f"预估大小失败：{exc}")
+            except tk.TclError:          # 预览窗已关闭
+                pass
+
         def _est_worker():
             total = len(plans)
-            for i, (plan, iid) in enumerate(zip(plans, row_ids)):
-                if stop_est.is_set():
-                    return
-                est_bytes = _estimate(plan, target_kb)
-                app.safe_after(0, lambda iid=iid, e=est_bytes, i=i:
-                               _update_row(iid, e, i, total))
-            if not stop_est.is_set():
-                app.safe_after(0, _done_status)
+            try:
+                for i, (plan, iid) in enumerate(zip(plans, row_ids)):
+                    if stop_est.is_set():
+                        return
+                    try:
+                        est_bytes = _estimate(plan, target_kb)
+                    except Exception:        # 单张坏图不该让整表停在「计算中…」
+                        est_bytes = scanner.file_size(plan.src)
+                    app.safe_after(0, lambda iid=iid, e=est_bytes, i=i:
+                                   _update_row(iid, e, i, total))
+                if not stop_est.is_set():
+                    app.safe_after(0, _done_status)
+            except Exception as exc:      # 后台线程兜底，避免预览状态永不收敛
+                app.safe_after(0, lambda e=exc: _est_failed(e))
 
         if target_kb <= 0:
             # 不压缩：预计大小 = 原大小，无需后台计算
@@ -548,8 +560,7 @@ def build(page: tk.Frame, app) -> None:
         else:
             threading.Thread(target=_est_worker, daemon=True).start()
 
-    def _run(plans, target_kb: int) -> None:
-        out_dir = Path(st["out_dir"].get().strip())
+    def _run(plans, target_kb: int, out_dir: Path) -> None:
         cancel_event = threading.Event()
         st["cancel"] = cancel_event
         bar_btn_cancel.config(state=tk.NORMAL)

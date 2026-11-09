@@ -8,6 +8,33 @@ from tkinter import ttk
 from rename_master.ui import theme as T
 
 
+# ---------- 孤行控制：网格排布 ----------
+def balanced_rows(n: int, max_cols: int, min_last: int = 2) -> list[int]:
+    """把 n 个元素按「每行最多 max_cols 个」排布，返回各行元素个数。
+
+    各行数量差 ≤1，并尽量避免末行只剩 1 个元素（widow / orphan）：
+        4 个 / 3 列 → [2, 2]      旧算法 3+1：末行孤卡 + 右侧大片留白
+        5 个 / 3 列 → [3, 2]
+        7 个 / 3 列 → [3, 2, 2]  旧算法 3+3+1：末行仍是孤卡
+
+    若均匀分配后末行仍不足 min_last，尝试减少行数把元素匀到前面的行；
+    首行已达 max_cols 时维持原分配，由调用方把不足的行铺满整行。
+    """
+    if n <= 0:
+        return []
+    max_cols = max(1, int(max_cols))
+    if n <= min_last and n <= max_cols:
+        return [n]
+    rows = max(1, -(-n // max_cols))
+    while rows > 1:
+        q, r = divmod(n, rows)
+        counts = [q + 1] * r + [q] * (rows - r)
+        if counts[-1] >= min_last or counts[0] >= max_cols:
+            return counts
+        rows -= 1
+    return [n]
+
+
 # ---------- 文字复制辅助 ----------
 def copy_to_clipboard(widget, text: str) -> None:
     """把文字写入系统剪贴板。"""
@@ -63,8 +90,12 @@ def _tree_selected_text(tv: ttk.Treeview, col_idx=None, all_rows=False) -> str:
     return "\n".join(lines)
 
 
-def enable_tree_copy(tv: ttk.Treeview) -> None:
-    """给 Treeview 加右键菜单 + Ctrl+C：复制单元格/整行/全部。"""
+def enable_tree_copy(tv: ttk.Treeview, on_delete=None) -> None:
+    """给 Treeview 加右键菜单 + Ctrl+C：复制单元格/整行/全部。
+
+    on_delete(indices): 可选回调；提供时菜单追加「删除选中文件」。
+    indices 为选中行的 0 起升序索引，由调用方决定如何更新自己的数据源。
+    """
     menu = tk.Menu(tv, tearoff=0)
     state = {"col": None}  # 右键所在列
 
@@ -86,18 +117,38 @@ def enable_tree_copy(tv: ttk.Treeview) -> None:
     menu.add_separator()
     menu.add_command(label="复制全部（含表头）", command=_copy_all)
 
+    del_index = None
+    if on_delete is not None:
+        def _delete_selected():
+            sel = tv.selection()
+            if sel:
+                on_delete(sorted(tv.index(iid) for iid in sel))
+
+        menu.add_separator()
+        menu.add_command(label="删除选中文件", command=_delete_selected)
+        del_index = menu.index("end")
+
     def _popup(event):
         row_id = tv.identify_row(event.y)
         col_str = tv.identify_column(event.x)  # 形如 "#1"
         if row_id:
-            # 若按住 Ctrl 则保留多选，否则只选中右键行
-            if not (event.state & 0x0004):
+            # 若按住 Ctrl 则保留多选并加入右键行，否则只选中右键行
+            if event.state & 0x0004:
+                tv.selection_add(row_id)
+            else:
                 tv.selection_set(row_id)
             tv.focus(row_id)
         try:
             state["col"] = int(col_str.lstrip("#"))
         except ValueError:
             state["col"] = None
+        if del_index is not None:
+            # 右键空白处不启用删除，避免误删之前残留的多选
+            count = len(tv.selection()) if row_id else 0
+            label = ("删除此文件" if count == 1 else
+                     f"删除选中文件（{count}）" if count else "删除选中文件")
+            menu.entryconfig(del_index, label=label,
+                             state="normal" if count else "disabled")
         menu.tk_popup(event.x_root, event.y_root)
 
     def _copy_current(event=None):
@@ -312,6 +363,36 @@ def secondary_button(master, text: str, command=None, **kw) -> tk.Button:
                      padx=padx, pady=pady, cursor="hand2", **kw)
 
 
+def checkbox(master, text: str, variable: tk.Variable, command=None) -> tk.Frame:
+    """统一的大方框复选框（☑/☐）：4 个功能页与高级选项卡片共用。
+
+    旧实现在这 5 处各复制了一份，字号 18 / 间距 4 散落在业务代码里，
+    改样式要同步改 5 个文件；现在统一从 theme 取 F_CHECK / S_XS。
+    """
+    box = tk.Frame(master, bg=T.C_CARD)
+
+    def _refresh():
+        mark_lbl.config(text="☑" if variable.get() else "☐")
+
+    def _toggle(_e=None):
+        variable.set(not variable.get())
+        _refresh()
+        if command:
+            command()
+
+    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
+                        font=(T.FONT_FAMILY, T.F_CHECK), cursor="hand2")
+    mark_lbl.pack(side=tk.LEFT)
+    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
+                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
+                        cursor="hand2")
+    text_lbl.pack(side=tk.LEFT, padx=(T.S_XS, 0))
+    mark_lbl.bind("<Button-1>", _toggle)
+    text_lbl.bind("<Button-1>", _toggle)
+    box.bind("<Map>", lambda e: _refresh())
+    return box
+
+
 def danger_button(master, text: str, command=None, **kw) -> tk.Button:
     """危险按钮（原地覆盖类二次确认用）：红底白字。"""
     padx = kw.pop("padx", T.S_MD)
@@ -492,10 +573,15 @@ def vlabel(master, text: str = "", **kw) -> SelectableText:
     return SelectableText(master, text, **kw)
 
 
-def hint_label(master, text: str, *, selectable: bool = True) -> tk.Widget:
-    """卡片内辅助说明；默认可鼠标拖选复制。"""
+def hint_label(master, text: str, *, selectable: bool = True,
+               wrap: str = "none") -> tk.Widget:
+    """卡片内辅助说明；默认可鼠标拖选复制。
+
+    wrap="word" 用于长说明：按容器宽度自动换行，窄窗口不会被裁成半截单行，
+    也不会出现最后一行只剩一两个字的寡行（需配合 pack(fill=X)）。
+    """
     if selectable:
-        return SelectableText(master, text)
+        return SelectableText(master, text, wrap=wrap)
     return tk.Label(master, text=text, font=(T.FONT_FAMILY, T.F_SM),
                     bg=T.C_CARD, fg=T.C_TEXT_L, anchor="w", justify=tk.LEFT)
 
@@ -617,14 +703,14 @@ def autofit_tree(tv: ttk.Treeview, flex: str | None = None, min_w: int = 48,
 
 
 def styled_tree(master, columns, height=8, show="headings",
-                flex: str | None = None) -> ttk.Treeview:
+                flex: str | None = None, on_delete=None) -> ttk.Treeview:
     """统一风格的 Treeview（样式由 App._apply_treeview_style 注册）。
 
     columns: [(列 id, 标题, 参考宽度, 对齐), ...]
     列宽交给 autofit_tree 动态算：内容多宽就多宽，剩余宽度全给 flex 列
     （默认第一列），因此表格始终铺满容器、不留空白大列；columns 里的宽度
     只作为该列的参考最小宽度。数据变化后调用 refit_tree(tv) 重新贴合内容。
-    自动带右键菜单 + Ctrl+C 复制。
+    自动带右键菜单 + Ctrl+C 复制；传入 on_delete 时菜单追加「删除选中文件」。
     """
     tv = ttk.Treeview(master, columns=[c[0] for c in columns], show=show,
                       height=height, style="RenameMaster.Treeview",
@@ -634,7 +720,7 @@ def styled_tree(master, columns, height=8, show="headings",
         tv.heading(cid, text=heading, anchor=anchor)
         tv.column(cid, width=width, anchor=anchor, stretch=False)
         floors[cid] = int(width)
-    enable_tree_copy(tv)
+    enable_tree_copy(tv, on_delete=on_delete)
     autofit_tree(tv, flex=flex, floors=floors)
     return tv
 

@@ -30,6 +30,21 @@ ERROR_LOG = ROOT / "inbox" / "build_error.txt"
 NAME = "RenameMaster"
 HIDDEN_IMPORTS = ["PIL", "openpyxl", "docx", "pypdf"]
 
+# 只打真正用得到的依赖。Pillow 会把「函数内可选 import」也暴露给 PyInstaller 的
+# 静态分析（Image.fromarray → numpy、ImageFont → fontTools），连带 numpy 的
+# openblas DLL（约 3.5 MB）一起进包；本软件只用 Image.open/save/exif_transpose
+# 处理 JPG/PNG/BMP，这些可选栈一律排除。历史水印功能已剥离，相关库也不再需要。
+EXCLUDE_MODULES = [
+    "numpy", "fontTools", "scipy", "pandas", "matplotlib", "cv2",
+    "skimage", "sklearn", "PyWavelets", "blind_watermark",
+    "pydoc_data", "unittest", "pytest", "setuptools", "pip", "yaml", "psutil",
+    # hook-PIL.Image 会无条件收集所有 *ImagePlugin；扫描白名单只有
+    # jpg/jpeg/png/bmp/heic，下面这些格式连带的大 .pyd 用不到。
+    # 注意保留 PIL.ImageTk（关于页赞助二维码要用）、Jpeg/Png/Bmp 插件。
+    "PIL.AvifImagePlugin", "PIL.WebPImagePlugin", "PIL.Jpeg2KImagePlugin",
+    "PIL.TiffImagePlugin", "PIL.ImageQt",
+]
+
 # 打包机必须真的具备这些运行时依赖，否则打出来的 EXE 会「能启动但功能缺失」
 REQUIRED_MODULES = ["tkinter", "PIL", "openpyxl", "docx", "pypdf",
                     "tkinterdnd2", "PyInstaller"]
@@ -121,6 +136,8 @@ def _build_cmd() -> list[str]:
     ]
     for mod in HIDDEN_IMPORTS:
         cmd += ["--hidden-import", mod]
+    for mod in EXCLUDE_MODULES:
+        cmd += ["--exclude-module", mod]
     assets = ROOT / "assets"
     if assets.is_dir():
         cmd += ["--add-data", f"{assets};assets"]

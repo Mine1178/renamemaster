@@ -18,12 +18,12 @@ from rename_master.ui import theme as T
 
 logger = logging.getLogger(__name__)
 
-APP_TITLE = "RenameMaster"
+APP_TITLE = "重命名大师"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
-_NAV_FONT_SIZE = 10
+_NAV_FONT_SIZE = T.F_BODY
 
 NAV_ITEMS = [
     ("home", "🏠", "首页"),
@@ -31,6 +31,9 @@ NAV_ITEMS = [
     ("pdf", "📄", "PDF 命名"),
     ("spreadsheet", "📊", "表格命名"),
     ("document", "📄", "文档命名"),
+    ("store", "🏪", "门店管理"),
+    ("sponsor", "☕", "赞助"),
+    ("help", "❓", "帮助"),
     ("about", "ℹ️", "关于"),
 ]
 
@@ -65,9 +68,10 @@ class App:
 
     # ---------- 布局 ----------
     @staticmethod
-    def _fit_logo_font(nav_w: int, max_size: int = 14, min_size: int = 9):
+    def _fit_logo_font(nav_w: int, max_size: int = T.F_METRIC,
+                       min_size: int = T.F_SM):
         """返回能塞进导航栏内宽的 Logo 字号（从大到小试探实际字宽）。"""
-        avail = max(40, int(nav_w) - 2 * T.S_XS - 6)
+        avail = max(40, int(nav_w) - 4 * T.S_XS)
         for size in range(max_size, min_size - 1, -1):
             try:
                 f = tkfont.Font(family=T.FONT_FAMILY, size=size, weight="bold")
@@ -78,7 +82,7 @@ class App:
         return (T.FONT_FAMILY, min_size, "bold")
 
     def _build(self) -> None:
-        self.df = tkfont.Font(family=T.FONT_FAMILY, size=10)
+        self.df = tkfont.Font(family=T.FONT_FAMILY, size=T.F_BODY)
         self.root.option_add("*Font", self.df)
         self._apply_treeview_style()
 
@@ -106,7 +110,7 @@ class App:
         lf = tk.Frame(nav, bg=T.C_PRIMARY, height=int(T.LOGO_HEIGHT * self.ui_scale))
         lf.pack(fill=tk.X, pady=(T.S_LG, T.S_SM))
         lf.pack_propagate(False)
-        tk.Label(lf, text="◉", font=(T.FONT_FAMILY, 19),
+        tk.Label(lf, text="◉", font=(T.FONT_FAMILY, T.F_H1),
                  bg=T.C_PRIMARY, fg=T.C_ACCENT).pack(pady=(T.S_XS, 0))
         # Logo 产品名：导航栏窄（112px），固定 14pt 粗体会横向溢出被裁。
         # 按实际字宽从 14pt 逐级降到能放进 nav 内宽的最大字号（v1.9 修复）。
@@ -114,7 +118,7 @@ class App:
                  bg=T.C_PRIMARY, fg=T.C_ACCENT).pack(pady=(T.S_XS, 0))
         tk.Label(lf, text=APP_SUBTITLE, font=(T.FONT_FAMILY, T.F_SM),
                  bg=T.C_PRIMARY, fg=T.C_LOGO_SUB,
-                 wraplength=int(nav_w * self.ui_scale) - 16,
+                 wraplength=int(nav_w * self.ui_scale) - 2 * T.S_SM,
                  justify=tk.CENTER).pack(padx=T.S_XS)
 
         # 导航按钮：激活 #334155 + 橙字，未激活 #94a3b8
@@ -123,7 +127,8 @@ class App:
                             font=(T.FONT_FAMILY, _NAV_FONT_SIZE),
                             bg=T.C_PRIMARY, fg=T.C_TEXT_FADE,
                             activebackground=T.C_SECONDARY, activeforeground=T.C_ACCENT,
-                            bd=0, padx=5, pady=5, anchor="w", cursor="hand2",
+                            bd=0, padx=T.S_XS, pady=T.S_XS, anchor="w",
+                            cursor="hand2",
                             relief=tk.FLAT, command=lambda k=key: self.show(k))
             btn.pack(fill=tk.X, pady=T.S_XS, padx=T.S_XS)
             self.navs[key] = btn
@@ -161,10 +166,37 @@ class App:
             "pdf": self._build_pdf,
             "spreadsheet": self._build_spreadsheet,
             "document": self._build_document,
+            "store": self._build_store,
+            "sponsor": self._build_sponsor,
+            "help": self._build_help,
             "about": self._build_about,
         }
         self.show("home")
         self._bind_hotkeys()
+        # 首屏竞态：_build() 里的 show() 发生在窗口尚未完成映射 / 最大化时，
+        # Canvas 仍是临时尺寸，那次 _sync_canvas 会把 page_host 压成极窄，
+        # 右侧表现为一片空白；用户点一次导航（show 又同步一遍）才恢复。
+        # 窗口就绪后主动重排，并留两次延迟兜底覆盖不同启动时序。
+        self.root.bind("<Configure>", self._on_root_configure, add="+")
+        self.root.after(0, self._show_initial_page)
+        self.root.after(150, self._sync_canvas)
+        self.root.after(400, self._sync_canvas)
+
+    def _show_initial_page(self) -> None:
+        """进入事件循环、窗口映射完成后重排当前页（含滚动区同步）。"""
+        if self._closed:
+            return
+        try:
+            self.show(self.cur)
+        except tk.TclError:
+            pass
+
+    def _on_root_configure(self, _event=None) -> None:
+        """窗口尺寸变化（含首次最大化）后同步滚动区宽度。"""
+        try:
+            self._sync_canvas()
+        except tk.TclError:
+            pass
 
     # ---------- 全局快捷键 ----------
     # 只注册三个"到哪一页都成立"的动作：打开目录 / 执行预览 / 取消或关窗。
@@ -208,6 +240,9 @@ class App:
 
     def _hotkey_run(self, _event=None):
         """Ctrl+Enter：等同底部「预览 / 开始执行」。"""
+        if self.is_busy():
+            self.set_status("正在执行中，请等待当前批次完成", "warn")
+            return "break"
         page = self._current_page()
         run = getattr(page, "hotkey_run", None)
         if callable(run):
@@ -231,19 +266,35 @@ class App:
         return "break"
 
     def cancel_current(self) -> bool:
-        """请求取消当前页正在执行的任务；有任务在跑返回 True。"""
-        page = self._current_page()
-        st = getattr(page, "st", None)
-        event = st.get("cancel") if isinstance(st, dict) else None
-        if st is None:
-            return False
-        try:
-            if event is not None:
+        """请求取消任一页面正在执行的任务；有任务在跑返回 True。
+
+        旧实现只看当前页：A 页执行中切到 B 页后，Esc / 取消按钮找不到
+        A 页的 event，任务停不下来。改为遍历所有已构建页面的 st["cancel"]。
+        """
+        for page in self.pages.values():
+            st = getattr(page, "st", None)
+            if not isinstance(st, dict):
+                continue
+            event = st.get("cancel")
+            if event is None:
+                continue
+            try:
                 event.set()
-                self.set_status("已请求取消，正在收尾…", "warn")
+            except (AttributeError, tk.TclError):
+                continue
+            self.set_status("已请求取消，正在收尾…", "warn")
+            return True
+        return False
+
+    def is_busy(self) -> bool:
+        """任一页面正在执行 / 提取正文（st["cancel"] 非 None 即忙）。
+
+        用于阻止执行期间叠开预览窗或再启一个 worker 写同一输出目录。
+        """
+        for page in self.pages.values():
+            st = getattr(page, "st", None)
+            if isinstance(st, dict) and st.get("cancel") is not None:
                 return True
-        except (AttributeError, tk.TclError):
-            return False
         return False
 
     def _apply_treeview_style(self) -> None:
@@ -261,7 +312,7 @@ class App:
         style.configure("RenameMaster.Treeview.Heading", background=T.C_PRIMARY,
                         foreground=T.C_WHITE,
                         font=(T.FONT_FAMILY, T.F_SM, "bold"),
-                        relief="flat", padding=(6, 8))
+                        relief="flat", padding=(T.S_XS, T.S_SM))
         style.map("RenameMaster.Treeview",
                   background=[("selected", T.C_HOVER), ("active", T.C_ROW_ALT)],
                   foreground=[("selected", T.C_TEXT)])
@@ -273,7 +324,7 @@ class App:
                         foreground=T.C_TEXT, bordercolor=T.C_BORDER,
                         lightcolor=T.C_CARD, darkcolor=T.C_CARD,
                         arrowcolor=T.C_TEXT_M, borderwidth=1, relief="flat",
-                        padding=(6, 4), font=(T.FONT_FAMILY, T.F_BODY))
+                        padding=(T.S_XS, T.S_XS), font=(T.FONT_FAMILY, T.F_BODY))
         style.map("RenameMaster.TCombobox",
                   fieldbackground=[("readonly", T.C_CARD), ("disabled", T.C_BG)],
                   foreground=[("disabled", T.C_TEXT_FADE)],
@@ -283,7 +334,7 @@ class App:
                         fieldbackground=T.C_CARD, foreground=T.C_TEXT,
                         bordercolor=T.C_BORDER, lightcolor=T.C_CARD,
                         darkcolor=T.C_CARD, borderwidth=1, relief="flat",
-                        padding=(6, 4), font=(T.FONT_FAMILY, T.F_BODY))
+                        padding=(T.S_XS, T.S_XS), font=(T.FONT_FAMILY, T.F_BODY))
         style.map("RenameMaster.TEntry",
                   fieldbackground=[("disabled", T.C_BG)],
                   foreground=[("disabled", T.C_TEXT_FADE)],
@@ -542,6 +593,27 @@ class App:
         f = self._page()
         self.pages["document"] = f
         from rename_master.ui.pages.document import build
+        build(f, self)
+        self._mount_action_bar()
+
+    def _build_store(self) -> None:
+        f = self._page()
+        self.pages["store"] = f
+        from rename_master.ui.pages.store import build
+        build(f, self)
+        self._mount_action_bar()
+
+    def _build_sponsor(self) -> None:
+        f = self._page()
+        self.pages["sponsor"] = f
+        from rename_master.ui.pages.sponsor import build
+        build(f, self)
+        self._mount_action_bar()
+
+    def _build_help(self) -> None:
+        f = self._page()
+        self.pages["help"] = f
+        from rename_master.ui.pages.help import build
         build(f, self)
         self._mount_action_bar()
 

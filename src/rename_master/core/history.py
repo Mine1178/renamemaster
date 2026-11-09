@@ -56,7 +56,11 @@ def record_batch(page: str, output_dir, plans, result: Optional[dict] = None) ->
     plans:  RenamePlan 列表（只记录实际落盘成功的）；
     result: execute_plan 返回的结果，用于只统计 done 的文件。
     """
-    out_dir = Path(output_dir)
+    # 历史可能跨重启使用，相对路径会随工作目录变化而指向别处 → 存绝对路径
+    try:
+        out_dir = Path(output_dir).resolve()
+    except OSError:
+        out_dir = Path(output_dir)
     done_names = set()
     if result and isinstance(result.get("done_names"), (list, set)):
         done_names = {str(n) for n in result["done_names"]}

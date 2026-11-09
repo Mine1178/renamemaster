@@ -6,11 +6,11 @@ a = Analysis(
     pathex=['D:/Desktop/SD/13.Rename/src'],
     binaries=[],
     datas=[('D:/Desktop/SD/13.Rename/assets', 'assets')],
-    hiddenimports=['PIL', 'openpyxl', 'docx', 'pypdf'],
+    hiddenimports=['PIL', 'openpyxl', 'docx', 'pypdf', 'tkinterdnd2'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['numpy', 'fontTools', 'scipy', 'pandas', 'matplotlib', 'cv2', 'skimage', 'sklearn', 'PyWavelets', 'blind_watermark', 'pydoc_data', 'unittest', 'pytest', 'setuptools', 'pip', 'yaml', 'psutil', 'PIL.AvifImagePlugin', 'PIL.WebPImagePlugin', 'PIL.Jpeg2KImagePlugin', 'PIL.TiffImagePlugin', 'PIL.ImageQt'],
     noarchive=False,
     optimize=0,
 )

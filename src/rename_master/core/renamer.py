@@ -97,12 +97,12 @@ def _prefix_name(src: Path, index: int, rule: Dict) -> str:
     digits = int(rule.get("digits", 3) or 3)
     start = int(rule.get("start", 1) or 1)
     sep = str(rule.get("sep", "_") or "")
-    keep_ext = bool(rule.get("keep_ext", True))
     date_prefix = bool(rule.get("date_prefix", False))
 
-    ext = src.suffix if keep_ext else ".jpg"
-    if not ext:
-        ext = ".jpg"
+    # 扩展名始终跟随源文件：旧实现在 keep_ext=False / 源文件无后缀时兜底成
+    # ".jpg"，会把 PDF、DOCX、XLSX 等改名成 .jpg（文件内容并未转换），
+    # 导致生成的文件打不开。界面没有「改成哪种扩展名」的输入项，保持原后缀最安全。
+    ext = src.suffix
     head = f"{rule.get('date') or date.today().strftime('%Y%m%d')}_" if date_prefix else ""
     number = f"{start + index:0{max(1, digits)}d}"
     return f"{head}{base}{sep}{number}{ext}"
@@ -179,7 +179,6 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
     paths = _sort_paths(paths, str(rule.get("sort_by", "")),
                         bool(rule.get("sort_desc", False)))
     mapping: Dict[str, str] = dict(rule.get("mapping") or {}) if mode == MODE_MAP else {}
-    keep_ext = bool(rule.get("keep_ext", True))
 
     used: set[str] = set()
     plans: List[RenamePlan] = []
@@ -193,9 +192,9 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
                 used.add(src.name.lower())
                 continue
             new_name = raw
-            # 新名没写扩展名 → 按 keep_ext 补（不勾则统一 .jpg）
+            # 对照表里没写扩展名时补源文件的后缀（不能凭空改成 .jpg）
             if not Path(new_name).suffix:
-                new_name = f"{new_name}{src.suffix if keep_ext else '.jpg'}"
+                new_name = f"{new_name}{src.suffix}"
         else:
             new_name = _prefix_name(src, i, rule)
 
@@ -209,7 +208,21 @@ def plan_rename(files: Iterable[os.PathLike | str], mode: str, rule: Dict) -> Li
         f_stem, f_ext = os.path.splitext(plan.dst_name)
         replaced = _apply_find_replace(f_stem, rule, plan)
         if replaced != f_stem:
-            plan.dst_name = f"{replaced}{f_ext}"
+            # 替换串可能带进 / \ : 等路径字符甚至绝对路径；必须重新净化，
+            # 否则 execute_plan 里 out_dir / dst_name 会逃逸输出目录。
+            replaced_full = f"{replaced}{f_ext}"
+            safe = sanitize_name(replaced_full) or src.name
+            plan.dst_name = safe
+            if safe != replaced_full:
+                plan.add_warning("替换结果含非法字符，已替换为 _")
+        # dst_name 只能是纯文件名：拒绝盘符 / 目录段（含 ..）做纵深防御，
+        # 避免任何调用方绕过预览直接构造计划时写出到输出目录之外。
+        if (Path(plan.dst_name).is_absolute()
+                or Path(plan.dst_name).name != plan.dst_name
+                or ".." in Path(plan.dst_name).parts):
+            plan.mark_error("新文件名包含路径，已禁止执行")
+            plans.append(plan)
+            continue
         if not plan.dst_name or plan.dst_name.startswith("."):
             plan.mark_error("新文件名为空")
             plans.append(plan)
@@ -350,6 +363,10 @@ def execute_plan(plans: Sequence[RenamePlan],
 
             # ③ 输出目录 / 防覆盖（基于最终名）
             dst = out_dir / plan.dst_name
+            # 基于「最终名」再做一次边界校验：压缩换后缀、外部构造的 plan
+            # 都可能改过 dst_name，绝不允许写出到输出目录之外。
+            if not dst.resolve().is_relative_to(out_resolved):
+                raise ValueError(f"目标名越出输出目录，拒绝写出：{plan.dst_name}")
             try:
                 same_file = dst.resolve() == src.resolve()
             except OSError:
@@ -397,10 +414,15 @@ def execute_plan(plans: Sequence[RenamePlan],
             done += 1
             done_names.append(plan.dst_name)
             if log_path is not None:
-                with open(log_path, "a", encoding="utf-8") as fh:
-                    fh.write(f"{src.name} → {plan.dst_name} | "
-                             f"{scanner.fmt_size(old_size)} → {scanner.fmt_size(new_size)} | "
-                             f"{'; '.join(plan.warnings) or 'OK'}\n")
+                # 日志失败不能把已经成功落盘的文件记成 failed（旧实现与写盘
+                # 共用同一个 except，磁盘满 / 无权限时会重复计数）。
+                try:
+                    with open(log_path, "a", encoding="utf-8") as fh:
+                        fh.write(f"{src.name} → {plan.dst_name} | "
+                                 f"{scanner.fmt_size(old_size)} → {scanner.fmt_size(new_size)} | "
+                                 f"{'; '.join(plan.warnings) or 'OK'}\n")
+                except OSError as exc:
+                    logger.warning("写操作日志失败（文件已生成）: %s", exc)
         except Exception as exc:                      # noqa: BLE001 单个文件失败不中断整批
             failed += 1
             errors.append(f"{plan.src.name}: {exc}")

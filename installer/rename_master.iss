@@ -1,14 +1,14 @@
-﻿; RenameMaster 安装包脚本
+﻿; 重命名大师 安装包脚本
 ; 编译：iscc installer\rename_master.iss
 
-#define MyAppName "RenameMaster"
-#define MyAppVersion "1.10.1"
+#define MyAppName "重命名大师"
+#define MyAppVersion "1.11.0"
 #define MyAppPublisher "本地工具"
 #define MyAppExeName "RenameMaster.exe"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-RENAMEMASTER01}
-AppName=RenameMaster · 文件批量命名助手
+AppName=重命名大师 · 文件批量命名助手
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
@@ -23,9 +23,9 @@ PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\assets\rename_master.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-VersionInfoVersion=1.10.1.0
-VersionInfoDescription=RenameMaster 文件批量命名助手
-VersionInfoProductName=RenameMaster
+VersionInfoVersion=1.11.0.0
+VersionInfoDescription=重命名大师 文件批量命名助手
+VersionInfoProductName=重命名大师
 VersionInfoProductVersion={#MyAppVersion}
 
 [Languages]

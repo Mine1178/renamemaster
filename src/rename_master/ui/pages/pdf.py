@@ -14,7 +14,8 @@ from rename_master.core import (doc_extract, history, mapper, naming_vars,
                                 renamer, scanner)
 from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
-                                      dialog_tree, fit_dialog, hint_label,
+                                      checkbox as _check, dialog_tree,
+                                      fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       refit_tree, styled_tree, vlabel,
                                       enable_label_copy)
@@ -41,27 +42,7 @@ def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -
     return w
 
 
-def _check(master, text: str, variable: tk.Variable, command=None):
-    """自定义大方框 checkbox：用 Label 模拟，☑/☐ 约 24px 便于点选。"""
-    box = tk.Frame(master, bg=T.C_CARD)
-    def _refresh():
-        mark_lbl.config(text="☑" if variable.get() else "☐")
-    def _toggle(e=None):
-        variable.set(not variable.get())
-        _refresh()
-        if command:
-            command()
-    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
-                        font=(T.FONT_FAMILY, 18), cursor="hand2")
-    mark_lbl.pack(side=tk.LEFT)
-    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
-                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
-                        cursor="hand2")
-    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
-    mark_lbl.bind("<Button-1>", _toggle)
-    text_lbl.bind("<Button-1>", _toggle)
-    box.bind("<Map>", lambda e: _refresh())
-    return box
+
 
 
 def build(page: tk.Frame, app) -> None:
@@ -106,7 +87,8 @@ def build(page: tk.Frame, app) -> None:
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
 
-    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name")
+    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name",
+                       on_delete=lambda indices: _remove_selected(indices))
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
                         style="RenameMaster.Vertical.TScrollbar", command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
@@ -168,6 +150,16 @@ def build(page: tk.Frame, app) -> None:
         _refresh_tree()
         app.set_status("已清空文件列表")
 
+    def _remove_selected(indices) -> None:
+        """右键删除：只把选中行移出待改名列表，不改动磁盘文件。"""
+        if not indices:
+            return
+        for idx in reversed(indices):
+            del st["files"][idx]
+        st["titles"].clear()
+        _refresh_tree()
+        app.set_status(f"已从列表移除 {len(indices)} 个文件（磁盘文件未改动）")
+
     # ---------- ② 命名规则 ----------
     card2 = Card(page, "② 命名规则", "统一前缀+序号（可叠加正文开头），或按 Excel 对照表一一改名",
                  accent=T.C_ACCENT)
@@ -212,7 +204,8 @@ def build(page: tk.Frame, app) -> None:
     sep_menu.pack(side=tk.LEFT, padx=(T.S_XS, T.S_XS))
     _check(prow2, "保留扩展名", st["keep_ext"]).pack(side=tk.LEFT)
     _hl = hint_label(prefix_box, "勾选正文提取时：前缀 + 正文开头 + 序号；"
-                                 "提取失败的文件自动退化为前缀 + 序号。示例：PDF_001.pdf")
+                                 "提取失败的文件自动退化为前缀 + 序号。示例：PDF_001.pdf",
+                     wrap="word")
     _hl.pack(fill=tk.X, pady=(T.S_XS, 0))
 
     # 模式二控件
@@ -394,17 +387,36 @@ def build(page: tk.Frame, app) -> None:
         progress["maximum"] = max(1, len(files))
         app.set_status("正在提取正文…")
 
+        def _fail(exc: Exception) -> None:
+            """线程异常兜底：复位忙碌态，避免界面永久停在「正在提取正文…」。"""
+            _reset_bar()
+            app.set_status(f"提取正文失败：{exc}", "error")
+            messagebox.showerror("提取正文失败",
+                                 f"正文提取中断，文件未被改动。\n\n{exc}")
+
         def _worker() -> None:
             titles = {}
-            for i, p in enumerate(files):
-                if cancel_event.is_set():
-                    break
-                titles[str(p)] = doc_extract.extract_title(p, BODY_CHARS)
-                app.safe_after(0, lambda i=i, n=p.name: _tick(i + 1, len(files), n))
-            st["titles"] = titles
+            bad = 0
+            try:
+                for i, p in enumerate(files):
+                    if cancel_event.is_set():
+                        break
+                    try:
+                        titles[str(p)] = doc_extract.extract_title(p, BODY_CHARS)
+                    except Exception:            # 单个损坏文件降级为空标题
+                        titles[str(p)] = ""
+                        bad += 1
+                    app.safe_after(0, lambda i=i, n=p.name: _tick(i + 1, len(files), n))
+                st["titles"] = titles
+            except Exception as exc:            # 后台线程必须兜底，否则按钮永久灰
+                app.safe_after(0, lambda e=exc: _fail(e))
+                return
             if cancel_event.is_set():
                 app.safe_after(0, _reset_bar)     # 用户中途取消，不弹预览
             else:
+                if bad:
+                    app.safe_after(0, lambda n=bad: app.set_status(
+                        f"{n} 个文件正文提取失败，已退化为基础名", "warn"))
                 app.safe_after(0, on_done)
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -422,6 +434,12 @@ def build(page: tk.Frame, app) -> None:
         bar_btn_preview.config(state=tk.NORMAL)
 
     def _open_preview(on_confirm=None) -> None:
+        if app.is_busy():
+            app.set_status("正在执行中，请等待当前批次完成", "warn")
+            return
+        if app._top_dialog() is not None:
+            app.set_status("已有预览窗口打开，请先关闭或确认", "warn")
+            return
         if not _validate():
             return
         if st["mode"].get() == "prefix" and st["use_content"].get():
@@ -431,6 +449,8 @@ def build(page: tk.Frame, app) -> None:
 
     def _show_preview(on_confirm=None) -> None:
         plans = _make_plans()
+        # 快照输出目录：确认执行必须用预览里展示的目录（预览窗非模态）
+        out_dir = Path(st["out_dir"].get().strip())
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
         win.configure(bg=T.C_BG)
@@ -441,7 +461,7 @@ def build(page: tk.Frame, app) -> None:
         y = max(0, (sh - h) // 2)
         win.minsize(800, 500)
         win.geometry(f'{w}x{h}+{x}+{y}')
-        head = "共 %d 个文件 → %s" % (len(plans), st["out_dir"].get())
+        head = "共 %d 个文件 → %s" % (len(plans), out_dir)
         if st["use_content"].get():
             head += f"（正文前 {BODY_CHARS} 字）"
         vlabel(win, text=head, font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
@@ -467,13 +487,12 @@ def build(page: tk.Frame, app) -> None:
 
         def _confirm():
             win.destroy()
-            on_confirm(plans)
+            on_confirm(plans, out_dir)
 
         dialog_buttons(win, T.C_BG, win.destroy,
                        on_confirm=_confirm if on_confirm is not None else None)
 
-    def _run(plans) -> None:
-        out_dir = Path(st["out_dir"].get().strip())
+    def _run(plans, out_dir: Path) -> None:
         cancel_event = threading.Event()
         st["cancel"] = cancel_event
         bar_btn_cancel.config(state=tk.NORMAL)

@@ -9,7 +9,6 @@ tkinterdnd2 的 DND_FILES 数据是 Tk 列表格式：每项要么是裸路径�
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Callable, List, Optional
 
@@ -55,7 +54,9 @@ def resolve_source_dir(raw: str) -> Optional[str]:
 
     - 拖入目录：直接用它；
     - 拖入文件：用它的父目录；
-    - 拖入多个：取共同目录（跨盘符时退化到第一个）。
+    - 拖入多个：全部同目录时取该目录，否则只取第一个所在目录。
+      （旧实现用 commonpath，同盘不同目录会退化到盘符根，页面随后递归
+      扫描整个磁盘，既慢又会把无关文件全加进列表。）
     """
     paths = parse_drop_paths(raw)
     if not paths:
@@ -67,11 +68,9 @@ def resolve_source_dir(raw: str) -> Optional[str]:
         except OSError:                       # 非法盘符 / 权限问题：退回 parent
             d = str(p.parent)
         dirs.append(d)
-    try:
-        common = os.path.commonpath(dirs)
-    except ValueError:
-        common = dirs[0]
-    return common or dirs[0]
+    # 同目录时结果本就是它；不同目录时共同祖先可能是盘符根，
+    # 只采用第一个路径所在目录，扫描范围最小、最可预期。
+    return dirs[0]
 
 
 def make_drop_handler(app) -> Callable[[object], None]:

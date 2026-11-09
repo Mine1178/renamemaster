@@ -20,13 +20,13 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
                #1F3864; }
 .cover .info { font-size: 12pt; color: #595959; }
 </style></head><body>
-<div class='cover'><div class='label'>使 用 手 册</div><h1>RenameMaster 使用手册</h1><div class='rule'></div><div class='info'>文档版本：V1.10.1<br>适用平台：Windows 10 / 11（64 位）<br>编制日期：2026 年 10 月</div></div>
+<div class='cover'><div class='label'>使 用 手 册</div><h1>重命名大师 使用手册</h1><div class='rule'></div><div class='info'>文档版本：V1.10.2<br>适用平台：Windows 10 / 11（64 位）<br>编制日期：2026 年 11 月</div></div>
 <p>使 用 手 册</p>
-<p>RenameMaster 使用手册</p>
+<p>重命名大师 使用手册</p>
 <p>本地运行的文件批量命名助手 · 照片 / PDF / 表格 / 文档一键整理</p>
-<p>文档版本：V1.10.1</p>
+<p>文档版本：V1.10.2</p>
 <p>适用平台：Windows 10 / 11（64 位）</p>
-<p>编制日期：2026 年 10 月</p>
+<p>编制日期：2026 年 11 月</p>
 <p>目 录</p>
 <p>（目录将在打开或打印时自动生成，请确保“更新域”已执行）</p>
 <h1>第一章  软件简介</h1>
@@ -42,10 +42,10 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <h1>第二章  安装与启动</h1>
 <h2>2.1  安装包方式（推荐）</h2>
 <p>1. 双击 RenameMaster_Setup.exe，按向导安装，可勾选「创建桌面快捷方式」。</p>
-<p>2. 从开始菜单或桌面双击 RenameMaster 启动。</p>
-<p>3. 卸载：设置 → 应用 → RenameMaster → 卸载，会一并清理 %APPDATA%\RenameMaster。</p>
+<p>2. 从开始菜单或桌面双击「重命名大师」启动。</p>
+<p>3. 卸载：设置 → 应用 → 重命名大师 → 卸载，会一并清理 %APPDATA%\RenameMaster。</p>
 <h2>2.2  免安装版</h2>
-<p>1. 把 RenameMaster.exe 复制到任意目录，双击即可启动。</p>
+<p>1. 把 RenameMaster.exe 复制到任意目录，双击即可启动；也可解压带版本号的 RenameMaster_*_Portable.zip 免安装压缩包（内含使用说明）。</p>
 <p>2. 首次若被 SmartScreen 拦截，点「更多信息」→「仍要运行」（未做代码签名，属正常）。</p>
 <p>3. 杀毒软件若提示风险，为 PyInstaller 单文件 EXE 常见误报，加入信任即可。</p>
 <h2>2.3  源码方式运行</h2>
@@ -72,7 +72,7 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <p>表 4  改名效果示例</p>
 <h1>第四章  功能详解</h1>
 <h2>4.1  照片批量命名</h2>
-<p>支持格式：jpg / jpeg / png / bmp / webp / tiff。</p>
+<p>支持格式：jpg / jpeg / png / bmp / heic（HEIC 的压缩与尺寸读取取决于本机解码支持）。</p>
 <h3>4.1.1  模式一：统一前缀 + 序号</h3>
 <p>表 5  模式一参数说明</p>
 <h3>4.1.2  模式二：Excel 对照表</h3>
@@ -100,10 +100,15 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <p>· 命名变量：{date} 今天、{mtime} 修改时间、{exif} 拍摄时间、{parent} 父文件夹、{stem} 原名。</p>
 <p>· 自定义排序：按文件名 / 大小 / 修改时间，升序 / 降序，决定序号顺序。</p>
 <p>· 查找替换：普通文本或正则批量替换，非法正则安全降级。</p>
+<p>· 排序与查找替换合并在同一行，展开卡片即可一次性设置。</p>
 <h2>4.6  撤销</h2>
 <p>每次执行记录产物，可点「撤销上次操作」（跨重启），删除生成物并清理空目录。</p>
 <h2>4.7  文字复制</h2>
 <p>界面标题、说明、标签、表格表头均可鼠标拖选，Ctrl+C 复制或右键复制；只读文字采用白名单，不会被键盘误删、粘贴或修改。</p>
+<h2>4.8  文件列表右键删除</h2>
+<p>· 在「① 选择文件」列表里右键某一行，会自动选中该行；点菜单里的「删除此文件」即可把它移出待改名列表。</p>
+<p>· 按住 Ctrl 右键可多选，菜单显示「删除选中文件（N）」批量移除；右键空白处时删除项不可用。</p>
+<p>· 删除只移出列表，不删除磁盘上的原文件，也不影响其它已加入的文件。</p>
 <h1>第五章  常见问题（FAQ）</h1>
 <p>使用过程中最常见的问题、成因与解决办法如表 8 所示。</p>
 <p>表 8  常见问题排查表</p>
@@ -118,8 +123,9 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <p>表 9  版本记录</p>
 <p>说明：V1.2~V1.9 中的「添加水印」功能已在 V1.10 整体剥离，后续由独立软件「水印助手」提供，RenameMaster 不再包含水印相关功能。</p>
 <h2>7.2  交付物</h2>
-<p>· dist\RenameMaster.exe：免安装单文件（约 27.8 MiB，V1.10 起不再包含水印相关依赖）。</p>
-<p>· dist\RenameMaster_Setup.exe：Inno 安装包（约 29.4 MiB）。</p>
+<p>· dist\RenameMaster.exe：免安装单文件（约 18.3 MB）。</p>
+<p>· dist\RenameMaster_*_Portable.zip：免安装压缩包（约 18.0 MB，内含使用说明）。</p>
+<p>· dist\RenameMaster_Setup.exe：Inno 安装包（约 20.0 MB）。</p>
 <p>· dist\RenameMaster_使用手册.pdf：本手册。</p>
 <p>· 更新方式：替换 dist 目录下对应文件即可。</p>
 <table><tr>
@@ -266,9 +272,9 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <td>_</td>
 </tr>
 <tr>
-<td>保留扩展名</td>
-<td>勾选后保留原扩展名（推荐）</td>
-<td>勾选</td>
+<td>扩展名</td>
+<td>始终跟随源文件的扩展名；压缩导致格式变化时自动同步</td>
+<td>自动</td>
 </tr>
 </table>
 <table><tr>
@@ -361,6 +367,11 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <td>后台线程支持取消</td>
 <td>点「取消」；已写入的保留，未处理的不再继续。</td>
 </tr>
+<tr>
+<td>右键删除会删掉原文件吗？</td>
+<td>仅移除列表项</td>
+<td>不会，只把该行移出待改名列表，磁盘文件保持原样。</td>
+</tr>
 </table>
 <table><tr>
 <th>版本</th>
@@ -426,6 +437,16 @@ th, td { border: 1px solid #9DB3D5; padding: 4pt 6pt; }
 <td>V1.10.1</td>
 <td>2026-10-15</td>
 <td>表格列宽改为按内容自适应并铺满界面：勾选列不再被拉伸留白，文件名列吸收多余宽度</td>
+</tr>
+<tr>
+<td>V1.10.1</td>
+<td>2026-10-18</td>
+<td>软件名中文化（窗口/关于页/快捷方式统一显示「重命名大师」）；图标重做为苹果风格透明底无白边；体积优化为 EXE 27.9 MB / Setup 29.6 MB</td>
+</tr>
+<tr>
+<td>V1.10.2</td>
+<td>2026-11-05</td>
+<td>文件列表支持右键删除单条 / 多选（仅移除列表）；高级选项排序与查找替换合并为一行；界面视觉规范统一与孤行控制；修复查找替换路径越界、非图片扩展名被误改、预览输出目录快照、后台线程异常卡死等缺陷；剥离 numpy / fontTools 等可选依赖，EXE 29.5 MB 降至 18.3 MB、安装包 31.2 MB 降至 20.0 MB</td>
 </tr>
 </table>
 </body></html>

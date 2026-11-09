@@ -18,7 +18,9 @@ tv.insert("", "end", iid="1", values=("照片_001.jpg", "场景_001.jpg"))
 tv.insert("", "end", iid="2", values=("照片_002.jpg", "场景_002.jpg"))
 tv.selection_set("1")
 
-# 合成键事件需组件真实 mapped 且有焦点才会派发
+# 合成键事件需组件真实 mapped 且有焦点才会派发；
+# 无人值守 / 远程桌面下顶层窗口未必自动获得键盘焦点，先显式争取一次。
+root.focus_force()
 root.update()
 tv.focus_set()
 root.update()

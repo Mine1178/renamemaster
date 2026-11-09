@@ -177,17 +177,17 @@ def _enum_windows(pids: set[int], only_visible: bool) -> list[tuple[int, int, st
     return found
 
 
-# 主窗口的标题标记：真实窗口标题形如 "RenameMaster · 文件批量命名助手"。
-APP_TITLE_MARK = "RenameMaster"
+# 主窗口的标题标记：v1.10.1 起软件名中文化，真实窗口标题形如
+# 「重命名大师 · 文件批量命名助手」。用旧英文名判据会把正常窗口判成失败。
+APP_TITLE_MARK = "重命名大师"
 # 【坑】Tk 在 set_title 之前会先映射一个标题恰为 "tk" 的顶层窗，tkinterdnd2 之类的
 # 扩展也可能额外产生可见的占位顶层窗。EnumWindows 的枚举顺序不保证「主窗口在前」，
 # 早先「取第一个可见有标题窗口」的写法会撞上这个占位窗，把冒烟判成
-# 「窗口标题不含 RenameMaster」的假失败（诊断清单里其实能看到正确窗口）。
+# 「窗口标题不含应用名」的假失败（诊断清单里其实能看到正确窗口）。
 _TK_PLACEHOLDER_TITLES = {"tk", "toplevel", "tk::toplevel", "root"}
 
-# 【坑】启动失败时 main.py 会弹一个系统对话框（类名 #32770），标题是
-# "RenameMaster - 图形界面初始化失败（Tk 不可用）"。它含 "RenameMaster"
-# 三个字，也"可见、有标题"，早先的判据会把它当成主窗口 → 冒烟假通过。
+# 【坑】启动失败时 main.py 会弹一个系统对话框（类名 #32770），标题里含应用名，
+# 也"可见、有标题"，早先的判据会把它当成主窗口 → 冒烟假通过。
 # 所以：真的主窗口必须是 Tk 顶层窗（类名 TkTopLevel），对话框一律不算。
 _DIALOG_CLASSES = {"#32770", "static", "button", "tooltips_class32"}
 _FATAL_TITLE_MARKERS = ("初始化失败", "启动失败", "无法启动", "Tk 不可用",
@@ -404,8 +404,8 @@ def _smoke(target: str, wait: float) -> tuple[list[str], list[str]]:
         if win is not None:
             hwnd, title = win
             print(f"窗口标题: {title!r}")
-            if "RenameMaster" not in title:
-                errors.append(f"窗口标题不含 RenameMaster: {title!r}")
+            if APP_TITLE_MARK not in title:
+                errors.append(f"窗口标题不含 {APP_TITLE_MARK}: {title!r}")
             # 【坑】「找到带正确标题的窗口」≠「窗口已经映射出来」。Tk 在 main.py
             # 建窗早期就会把标题挂上去，但那一刻窗口还停在 (-32000,-32000) 的默认
             # 占位位置、尺寸仍是 314x50；此时调 SW_MAXIMIZE 是无效的（窗口还没

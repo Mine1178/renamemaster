@@ -4,9 +4,9 @@ from __future__ import annotations
 import tkinter as tk
 
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import Card, PageHeader, vlabel
+from rename_master.ui.widgets import Card, PageHeader, balanced_rows, vlabel
 
-# 窗口宽度 → 卡片列数（<1100px 收成 1 列，任务书 §4.6.1）
+# 窗口宽度 → 卡片最多列数（按卡片实测最小可读宽度定，见 theme.CARD_MIN_W）
 _WIDE_MIN = 1100
 _MID_MIN = 760
 _GAP = T.S_MD            # 卡片之间固定间距 12px
@@ -26,12 +26,13 @@ ENTRIES = [
     ("📄", "文档批量命名", T.C_SUCCESS,
      "Word / PDF / TXT 取正文开头自动取名，再叠加前缀与序号规则。",
      "document"),
+    ("🏪", "门店档案管理", T.C_ACCENT,
+     "本地维护门店档案，支持 Excel 批量导入 / 导出与模糊搜索。",
+     "store"),
 ]
 
 # 入口卡片底部留白：描述下垫一个空 Frame，保证卡片等高且「进入 →」不贴描述
 _SPACER_H = 24
-# 网格最多用到的列（3 卡片列 + 2 间隔列 = 0..4）
-_MAX_GRID_COL = 5
 
 
 def _shorten(text: str, limit: int = 56) -> str:
@@ -57,7 +58,7 @@ def build(page: tk.Frame, app) -> None:
         card = Card(grid, title="", accent=accent,
                     on_click=lambda k=key: app.show(k))
         # body 自上而下：大号 emoji → 标题 → 描述（全部居中）
-        vlabel(card.body, emoji, font=(T.FONT_FAMILY, 30),
+        vlabel(card.body, emoji, font=(T.FONT_FAMILY, T.F_ICON),
                bg=T.C_CARD, fg=accent, wrap="word", compact=True,
                justify=tk.CENTER).pack(fill=tk.X, pady=(T.S_SM, 0))
         vlabel(card.body, title, font=(T.FONT_FAMILY, T.F_METRIC, "bold"),
@@ -76,54 +77,51 @@ def build(page: tk.Frame, app) -> None:
             if hasattr(d, "_auto_height"):
                 d._auto_height()
 
-    def _configure_columns(ncols: int) -> None:
-        """卡片列(偶数列, weight=1 uniform) + 固定间隔列(奇数列, minsize=_GAP)。"""
-        for c in range(ncols):
-            grid.grid_columnconfigure(c * 2, weight=1, uniform="home_card")
-            if c < ncols - 1:
-                grid.grid_columnconfigure(c * 2 + 1, weight=0, minsize=_GAP,
-                                          uniform="")
-        # 响应式收列时，关掉不再使用的旧列（否则残留权重 / 宽度）
-        for old in range(ncols * 2 - 1, _MAX_GRID_COL + 1):
-            grid.grid_columnconfigure(old, weight=0, minsize=0, uniform="")
+    # 每行一个容器：行内卡片 pack(expand=True) 等宽铺满，末行元素少也不会
+    # 出现「左侧一张卡、右侧一大片空白」的孤行（旧实现按固定列数排 3+1）。
+    row_frames: list[tk.Frame] = []
 
-    def _relayout(cols: int) -> None:
-        for c in cards:
-            c.grid_forget()
-        _configure_columns(cols)
-        total_rows = -(-len(cards) // cols)
-        for i, c in enumerate(cards):
-            r, cc = i // cols, i % cols
-            pady = (0, _GAP) if r < total_rows - 1 else (0, 0)
-            c.grid(row=r, column=cc * 2, sticky="nsew", pady=pady)
+    def _relayout(counts: list[int]) -> None:
+        grid.grid_columnconfigure(0, weight=1)
+        for rowf in row_frames:
+            for slave in rowf.pack_slaves():
+                slave.pack_forget()
+            # Tk 按创建顺序堆叠子窗口：行容器晚于卡片创建，若不显式压到底层，
+            # 它的 C_BG 背景会把整片卡片盖住，首页看起来就是「没有内容」。
+            rowf.lower()
+        for r, count in enumerate(counts):
+            if r >= len(row_frames):
+                rowf = tk.Frame(grid, bg=T.C_BG)
+                row_frames.append(rowf)
+                rowf.lower()
+            else:
+                rowf = row_frames[r]
+            rowf.grid(row=r, column=0, sticky="ew")
+            first = sum(counts[:r])
+            last_row = r == len(counts) - 1
+            for j in range(count):
+                card = cards[first + j]
+                card.pack(
+                    in_=rowf, side=tk.LEFT, fill=tk.BOTH, expand=True,
+                    padx=(0 if j == 0 else _GAP, 0),
+                    pady=(0, 0) if last_row else (0, _GAP))
+                card.lift()          # 双保险：卡片始终在行容器之上
+        for rowf in row_frames[len(counts):]:
+            rowf.grid_forget()
         _fit_descs()
 
-    state = {"cols": 0}
-
-    def _balanced_cols(cols: int) -> int:
-        """末行只剩 1 张卡时降一档列数，避免右侧大片留白。
-
-        v1.10 去掉「添加水印」后功能卡从 5 张变 4 张，宽屏 3 列会排成 3+1
-        （第二行只占 1/3 宽，右边 2/3 空着）。降到 2 列即 2+2，饱满且等高。
-        5 张卡是 3+2，末行 2 张不算孤卡，仍保持 3 列（v1.9 观感不变）。
-        """
-        cols = max(1, min(cols, len(cards)))
-        while cols > 1:
-            rows = -(-len(cards) // cols)
-            lonely_last = (rows >= 2 and len(cards) - (rows - 1) * cols == 1)
-            if lonely_last and len(cards) % (cols - 1) == 0:
-                cols -= 1
-            else:
-                break
-        return cols
+    state = {"counts": ()}
 
     def _on_resize(event=None) -> None:
-        width = grid.winfo_width() or _WIDE_MIN
-        cols = 3 if width >= _WIDE_MIN else (2 if width >= _MID_MIN else 1)
-        cols = _balanced_cols(cols)
-        if cols != state["cols"]:
-            state["cols"] = cols
-            _relayout(cols)
+        width = grid.winfo_width()
+        if width <= 1:                    # 首次布局尚未拿到真实宽度
+            width = _WIDE_MIN
+        max_cols = (T.CARD_MAX_COLS if width >= _WIDE_MIN else
+                    2 if width >= _MID_MIN else 1)
+        counts = tuple(balanced_rows(len(cards), max_cols))
+        if counts != state["counts"]:
+            state["counts"] = counts
+            _relayout(list(counts))
         else:
             _fit_descs()
 

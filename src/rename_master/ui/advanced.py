@@ -12,7 +12,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from rename_master.ui import theme as T
-from rename_master.ui.widgets import Card, hint_label, vlabel
+from rename_master.ui.widgets import Card, checkbox as _check, hint_label, vlabel
 
 # (内部 key, 显示文字)
 SORT_CHOICES = [
@@ -24,30 +24,6 @@ SORT_CHOICES = [
 ]
 _LABEL_TO_KEY = {label: key for key, label in SORT_CHOICES}
 _KEY_TO_LABEL = {key: label for key, label in SORT_CHOICES}
-
-
-def _check(master, text: str, variable: tk.Variable) -> tk.Widget:
-    """自定义大方框 checkbox：与各页面 _check 视觉一致（☑/☐ 约 24px）。"""
-    box = tk.Frame(master, bg=T.C_CARD)
-
-    def _refresh():
-        mark_lbl.config(text="☑" if variable.get() else "☐")
-
-    def _toggle(_e=None):
-        variable.set(not variable.get())
-        _refresh()
-
-    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
-                        font=(T.FONT_FAMILY, 18), cursor="hand2")
-    mark_lbl.pack(side=tk.LEFT)
-    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
-                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
-                        cursor="hand2")
-    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
-    mark_lbl.bind("<Button-1>", _toggle)
-    text_lbl.bind("<Button-1>", _toggle)
-    box.bind("<Map>", lambda e: _refresh())
-    return box
 
 
 def create_vars(app, cfg_prefix: str) -> dict:
@@ -68,48 +44,49 @@ def create_vars(app, cfg_prefix: str) -> dict:
 
 
 def build_card(page, app, adv: dict) -> Card:
-    """构建「高级选项」卡片：排序一行、查找替换一行、变量说明一行。"""
+    """构建「高级选项」卡片：排序与查找替换同一行、变量说明一行。"""
     card = Card(page, "高级选项（可选）",
                 "排序决定序号顺序 · 查找替换批量改字 · 基础名称支持日期变量",
                 accent=T.C_INFO, collapsible=True, start_collapsed=True)
     card.pack(fill=tk.X, pady=(0, T.S_MD))
 
-    # ---- 排序行 ----
-    row1 = tk.Frame(card.body, bg=T.C_CARD)
-    row1.pack(fill=tk.X)
-    vlabel(row1, text="排序", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+    # ---- 排序 + 查找替换：合并为一行 ----
+    row = tk.Frame(card.body, bg=T.C_CARD)
+    row.pack(fill=tk.X)
+    vlabel(row, text="排序", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
            fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    sort_combo = ttk.Combobox(row1, textvariable=adv["sort_label"],
+    sort_combo = ttk.Combobox(row, textvariable=adv["sort_label"],
                               values=[c[1] for c in SORT_CHOICES],
                               state="readonly", width=18,
                               style="RenameMaster.TCombobox")
-    sort_combo.pack(side=tk.LEFT, padx=(T.S_SM, T.S_SM))
+    sort_combo.pack(side=tk.LEFT, padx=(T.S_SM, T.S_XS))
     sort_combo.bind(
         "<<ComboboxSelected>>",
         lambda _e: adv["sort_by"].set(
             _LABEL_TO_KEY.get(adv["sort_label"].get(), "")))
-    _check(row1, "降序", adv["sort_desc"]).pack(side=tk.LEFT)
+    _check(row, "降序", adv["sort_desc"]).pack(side=tk.LEFT, padx=(0, T.S_MD))
 
-    # ---- 查找替换行 ----
-    row2 = tk.Frame(card.body, bg=T.C_CARD)
-    row2.pack(fill=tk.X, pady=(T.S_SM, 0))
-    vlabel(row2, text="查找", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
-           fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Entry(row2, textvariable=adv["find"], relief=tk.FLAT, bg=T.C_CARD,
-             fg=T.C_TEXT, highlightbackground=T.C_BORDER, highlightthickness=1,
-             width=16).pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
-    vlabel(row2, text="替换为", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
-           fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
-    tk.Entry(row2, textvariable=adv["repl"], relief=tk.FLAT, bg=T.C_CARD,
-             fg=T.C_TEXT, highlightbackground=T.C_BORDER, highlightthickness=1,
-             width=16).pack(side=tk.LEFT, padx=(T.S_SM, T.S_SM))
-    _check(row2, "正则", adv["use_regex"]).pack(side=tk.LEFT)
+    tk.Frame(row, bg=T.C_BORDER, width=1).pack(
+        side=tk.LEFT, fill=tk.Y, padx=(0, T.S_MD), pady=T.S_XS)
 
-    # ---- 变量说明（一行显示，不换行）----
+    vlabel(row, text="查找", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+           fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    tk.Entry(row, textvariable=adv["find"], relief=tk.FLAT, bg=T.C_CARD,
+             fg=T.C_TEXT, highlightbackground=T.C_BORDER, highlightthickness=1,
+             width=13).pack(side=tk.LEFT, padx=(T.S_SM, T.S_MD))
+    vlabel(row, text="替换为", font=(T.FONT_FAMILY, T.F_BODY), bg=T.C_CARD,
+           fg=T.C_TEXT_M, anchor="w").pack(side=tk.LEFT)
+    tk.Entry(row, textvariable=adv["repl"], relief=tk.FLAT, bg=T.C_CARD,
+             fg=T.C_TEXT, highlightbackground=T.C_BORDER, highlightthickness=1,
+             width=13).pack(side=tk.LEFT, padx=(T.S_SM, T.S_SM))
+    _check(row, "正则", adv["use_regex"]).pack(side=tk.LEFT)
+
+    # ---- 变量说明：宽窗口仍是一行，窄窗口自动换行，避免被裁成半截孤行 ----
     hint_label(
         card.body,
         "基础名称可写：{date}今天 {mtime}修改时间 {exif}拍摄时间 {parent}父文件夹；"
         "正则示例：查找 (\\d+) 替换 P\\1",
+        wrap="word",
     ).pack(fill=tk.X, pady=(T.S_SM, 0))
     return card
 

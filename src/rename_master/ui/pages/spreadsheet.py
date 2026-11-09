@@ -12,7 +12,8 @@ from tkinter import filedialog, messagebox, ttk
 from rename_master.core import history, mapper, renamer, scanner
 from rename_master.ui import advanced, theme as T
 from rename_master.ui.widgets import (Card, PageHeader, dialog_buttons,
-                                      dialog_tree, fit_dialog, hint_label,
+                                      checkbox as _check, dialog_tree,
+                                      fit_dialog, hint_label,
                                       primary_button, secondary_button,
                                       refit_tree, styled_tree, vlabel,
                                       enable_label_copy)
@@ -35,27 +36,7 @@ def _radio(master, text: str, variable: tk.Variable, value: str, command=None) -
     return w
 
 
-def _check(master, text: str, variable: tk.Variable, command=None):
-    """自定义大方框 checkbox：用 Label 模拟，☑/☐ 约 24px 便于点选。"""
-    box = tk.Frame(master, bg=T.C_CARD)
-    def _refresh():
-        mark_lbl.config(text="☑" if variable.get() else "☐")
-    def _toggle(e=None):
-        variable.set(not variable.get())
-        _refresh()
-        if command:
-            command()
-    mark_lbl = tk.Label(box, text="", bg=T.C_CARD, fg=T.C_ACCENT,
-                        font=(T.FONT_FAMILY, 18), cursor="hand2")
-    mark_lbl.pack(side=tk.LEFT)
-    text_lbl = tk.Label(box, text=text, bg=T.C_CARD, fg=T.C_TEXT,
-                        font=(T.FONT_FAMILY, T.F_BODY), anchor="w",
-                        cursor="hand2")
-    text_lbl.pack(side=tk.LEFT, padx=(4, 0))
-    mark_lbl.bind("<Button-1>", _toggle)
-    text_lbl.bind("<Button-1>", _toggle)
-    box.bind("<Map>", lambda e: _refresh())
-    return box
+
 
 
 def build(page: tk.Frame, app) -> None:
@@ -98,7 +79,8 @@ def build(page: tk.Frame, app) -> None:
     secondary_button(bar, "➕ 添加文件", command=lambda: _add_files()).pack(side=tk.LEFT)
     secondary_button(bar, "🗑 清空", command=lambda: _clear()).pack(side=tk.LEFT)
 
-    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name")
+    tree = styled_tree(card1.body, FILE_COLS, height=8, flex="name",
+                       on_delete=lambda indices: _remove_selected(indices))
     vsb = ttk.Scrollbar(card1.body, orient="vertical",
                         style="RenameMaster.Vertical.TScrollbar", command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
@@ -157,6 +139,15 @@ def build(page: tk.Frame, app) -> None:
         st["src_dir"].set("")
         _refresh_tree()
         app.set_status("已清空文件列表")
+
+    def _remove_selected(indices) -> None:
+        """右键删除：只把选中行移出待改名列表，不改动磁盘文件。"""
+        if not indices:
+            return
+        for idx in reversed(indices):
+            del st["files"][idx]
+        _refresh_tree()
+        app.set_status(f"已从列表移除 {len(indices)} 个文件（磁盘文件未改动）")
 
     # ---------- ② 命名规则 ----------
     card2 = Card(page, "② 命名规则", "统一前缀 + 序号，或按 Excel 对照表一一改名",
@@ -345,9 +336,17 @@ def build(page: tk.Frame, app) -> None:
         return True
 
     def _open_preview(on_confirm=None) -> None:
+        if app.is_busy():
+            app.set_status("正在执行中，请等待当前批次完成", "warn")
+            return
+        if app._top_dialog() is not None:
+            app.set_status("已有预览窗口打开，请先关闭或确认", "warn")
+            return
         if not _validate():
             return
         plans = _make_plans()
+        # 快照输出目录：确认执行必须用预览里展示的目录（预览窗非模态）
+        out_dir = Path(st["out_dir"].get().strip())
         win = tk.Toplevel(app.root)
         win.title("改名结果预览")
         win.configure(bg=T.C_BG)
@@ -358,7 +357,7 @@ def build(page: tk.Frame, app) -> None:
         y = max(0, (sh - h) // 2)
         win.minsize(800, 500)
         win.geometry(f'{w}x{h}+{x}+{y}')
-        vlabel(win, text=f"共 {len(plans)} 个文件 → {st['out_dir'].get()}",
+        vlabel(win, text=f"共 {len(plans)} 个文件 → {out_dir}",
                  font=(T.FONT_FAMILY, T.F_SECTION, "bold"),
                  bg=T.C_BG, fg=T.C_TEXT, anchor="w").pack(fill=tk.X,
                                                           padx=T.S_LG,
@@ -382,13 +381,12 @@ def build(page: tk.Frame, app) -> None:
 
         def _confirm():
             win.destroy()
-            on_confirm(plans)
+            on_confirm(plans, out_dir)
 
         dialog_buttons(win, T.C_BG, win.destroy,
                        on_confirm=_confirm if on_confirm is not None else None)
 
-    def _run(plans) -> None:
-        out_dir = Path(st["out_dir"].get().strip())
+    def _run(plans, out_dir: Path) -> None:
         cancel_event = threading.Event()
         st["cancel"] = cancel_event
         bar_btn_cancel.config(state=tk.NORMAL)
