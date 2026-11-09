@@ -15,6 +15,7 @@
 
 ### 其它
 - 版本号统一：`app.py` / `installer/rename_master.iss` / `build_manual_pdf.py` 同步至 1.11.0。
+- 推广素材：`build_social_preview.py` 生成 1280×640 社交预览图；`docs/screenshots/v1.11.0/` 收录真实界面截图（已裁去含本机私有路径的区域）；README 改为推广门面（下载直达 / 徽章 / 界面预览 / 适用场景 / 许可说明）。
 
 ## [1.10.x] 既有版本（摘要）
 
