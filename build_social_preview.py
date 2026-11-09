@@ -6,7 +6,7 @@
 
 GitHub 社交预览推荐 1280x640（最小 640x320），上传到
 仓库 Settings → Social preview。本图只做品牌排版 + 几何化界面示意，
-不冒充真实软件截图。
+不冒充真实软件截图；界面示意按 v1.10.2 实际功能绘制（6 项导航 / 4 张卡）。
 """
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ C_BORDER = "#e2e8f0"
 C_ROW_ALT = "#f8fafc"
 C_SUCCESS = "#16a34a"
 C_INFO = "#2563eb"
-C_PURPLE = "#7c3aed"
 
 FONT_REG = Path("C:/Windows/Fonts/msyh.ttc")
 FONT_BOLD = Path("C:/Windows/Fonts/msyhbd.ttc")
@@ -41,7 +40,6 @@ def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     path = FONT_BOLD if bold else FONT_REG
     if path.exists():
         return ImageFont.truetype(str(path), size)
-    # 非 Windows 回退（中文可能缺字，仅用于本地预览）
     return ImageFont.load_default(size=size)
 
 
@@ -64,11 +62,11 @@ def main() -> None:
            fill=C_PRIMARY)
     d.text((72, 298), "一键规范改名，顺带压缩图片", font=_font(23),
            fill=C_TEXT_M)
-    d.text((72, 336), "还能管一份门店档案台账", font=_font(23),
+    d.text((72, 336), "执行前预览 · 绝不原地覆盖", font=_font(23),
            fill=C_TEXT_M)
 
     chips = [("批量改名", C_ACCENT), ("图片压缩", C_INFO),
-             ("门店台账", C_SUCCESS), ("纯本地", C_SECONDARY)]
+             ("预览核对", C_SUCCESS), ("纯本地", C_SECONDARY)]
     x = 72
     for label, color in chips:
         f = _font(19, True)
@@ -80,10 +78,10 @@ def main() -> None:
         d.text((x + 18, 401), label, font=f, fill=color)
         x += cw + 12
 
-    d.text((72, 566), "v1.11.0  ·  输出隔离 · 可撤销  ·  数据不出本机",
+    d.text((72, 566), "v1.10.2  ·  输出隔离 · 可撤销  ·  数据不出本机",
            font=_font(19), fill=C_TEXT_L)
 
-    # ---------------- 右侧界面示意 ----------------
+    # ---------------- 右侧界面示意（v1.10.2 首页） ----------------
     wx, wy, ww, wh = 648, 66, 566, 508
     d.rounded_rectangle([wx, wy, wx + ww, wy + wh], radius=14,
                         fill=C_CARD, outline=C_BORDER, width=2)
@@ -95,11 +93,11 @@ def main() -> None:
     for i, c in enumerate(("#ef4444", "#f59e0b", "#22c55e")):
         d.ellipse([wx + 18 + i * 20, wy + 14, wx + 28 + i * 20, wy + 24], fill=c)
     tf = _font(13)
-    tw = _text_w(d, "重命名大师 v1.11.0", tf)
-    d.text((wx + ww - tw - 18, wy + 10), "重命名大师 v1.11.0",
-           font=tf, fill=C_TEXT_FADE)
+    title = "重命名大师 v1.10.2"
+    tw = _text_w(d, title, tf)
+    d.text((wx + ww - tw - 18, wy + 10), title, font=tf, fill=C_TEXT_FADE)
 
-    # 左侧导航
+    # 左侧导航（6 项，与 app.py NAV_ITEMS 一致）
     sy = wy + 38
     sw = 120
     d.rectangle([wx + 2, sy, wx + sw, wy + wh - 2], fill=C_PRIMARY)
@@ -109,12 +107,11 @@ def main() -> None:
     d.text((wx + (sw - lw) // 2, sy + 42), "重命名大师", font=lf,
            fill=C_ACCENT)
 
-    nav = ["首页", "照片命名", "PDF 命名", "表格命名",
-           "文档命名", "门店管理", "赞助", "帮助", "关于"]
+    nav = ["首页", "照片命名", "PDF 命名", "表格命名", "文档命名", "关于"]
     nf = _font(13)
     for i, label in enumerate(nav):
         y0 = sy + 82 + i * 43
-        active = i == 5
+        active = i == 0
         if active:
             d.rounded_rectangle([wx + 8, y0, wx + sw - 6, y0 + 36],
                                 radius=5, fill=C_SECONDARY)
@@ -123,60 +120,37 @@ def main() -> None:
         d.text((wx + 30, y0 + 9), label, font=nf,
                fill=C_CARD if active else C_TEXT_FADE)
 
-    # 内容区
+    # 内容区：首页标题 + 4 张功能卡（2x2）
     cx = wx + sw + 20
     cw = wx + ww - cx - 20
-    d.text((cx, sy + 20), "门店管理", font=_font(23, True), fill=C_TEXT)
-    d.text((cx, sy + 54), "维护门店档案 · 支持 Excel 批量导入 / 导出",
+    d.text((cx, sy + 20), "首页", font=_font(23, True), fill=C_TEXT)
+    d.text((cx, sy + 54), "文件批量命名助手 · 选一个功能开始",
            font=_font(13), fill=C_TEXT_L)
     d.rectangle([cx, sy + 82, cx + cw, sy + 84], fill=C_ACCENT)
 
-    # 工具栏
-    tools = [("＋ 新增门店", C_ACCENT), ("导入 Excel", C_CARD),
-             ("导出 Excel", C_CARD)]
-    tx = cx
-    for label, bg in tools:
-        bf = _font(12, True)
-        bw = _text_w(d, label, bf) + 24
-        d.rounded_rectangle([tx, sy + 98, tx + bw, sy + 128], radius=5,
-                            fill=bg, outline=C_BORDER if bg == C_CARD else bg,
-                            width=1)
-        d.text((tx + 12, sy + 105), label, font=bf,
-               fill=C_CARD if bg == C_ACCENT else C_TEXT_M)
-        tx += bw + 8
-
-    # 表格
-    ty = sy + 146
-    th = 236
-    d.rectangle([cx, ty, cx + cw, ty + th], fill=C_CARD,
-                outline=C_BORDER, width=1)
-    d.rectangle([cx + 1, ty + 1, cx + cw - 1, ty + 30], fill=C_PRIMARY)
-    heads = ["门店编号", "门店名称", "城市", "负责人", "电话"]
-    col_x = [cx + 12, cx + 92, cx + 212, cx + 288, cx + 366]
-    hf = _font(12, True)
-    for hx, h in zip(col_x, heads):
-        d.text((hx, ty + 8), h, font=hf, fill=C_CARD)
-
-    rows = [
-        ("S001", "旗舰店", "昆明", "张三", "138****0001"),
-        ("S002", "人民路分店", "曲靖", "李四", "139****0002"),
-        ("S003", "开发区店", "昆明", "王五", "137****0003"),
-        ("S004", "高铁站店", "大理", "赵六", "136****0004"),
+    cards = [
+        ("照片命名", "前缀+序号 / Excel 对照表", C_ACCENT),
+        ("PDF 命名", "取正文开头自动取名", C_INFO),
+        ("表格命名", "xlsx / xls / csv 规范", C_SUCCESS),
+        ("文档命名", "Word / PDF / TXT 取名", C_SECONDARY),
     ]
-    rf = _font(12)
-    for i, row in enumerate(rows):
-        ry = ty + 30 + i * 42
-        if i % 2 == 1:
-            d.rectangle([cx + 1, ry, cx + cw - 1, ry + 42], fill=C_ROW_ALT)
-        d.rectangle([cx + 1, ry + 41, cx + cw - 1, ry + 42], fill=C_BORDER)
-        for hx, val in zip(col_x, row):
-            d.text((hx, ry + 12), val, font=rf, fill=C_TEXT_M)
-
-    # 右下角强调小卡
-    d.rounded_rectangle([cx + cw - 128, ty + th + 12, cx + cw, ty + th + 60],
-                        radius=6, fill=C_CARD, outline=C_BORDER, width=1)
-    d.text((cx + cw - 116, ty + th + 22), "数据存于本机",
-           font=_font(12, True), fill=C_SUCCESS)
+    gap = 12
+    card_w = (cw - gap) // 2
+    card_h = 132
+    top = sy + 104
+    for i, (name, desc, color) in enumerate(cards):
+        r, c = divmod(i, 2)
+        x0 = cx + c * (card_w + gap)
+        y0 = top + r * (card_h + gap)
+        d.rounded_rectangle([x0, y0, x0 + card_w, y0 + card_h], radius=8,
+                            fill=C_CARD, outline=C_BORDER, width=2)
+        d.rounded_rectangle([x0, y0, x0 + card_w, y0 + 5], radius=2, fill=color)
+        d.rounded_rectangle([x0 + 18, y0 + 22, x0 + 42, y0 + 46],
+                            radius=6, fill=color)
+        d.text((x0 + 18, y0 + 58), name, font=_font(17, True), fill=C_TEXT)
+        d.text((x0 + 18, y0 + 88), desc, font=_font(12), fill=C_TEXT_M)
+        d.text((x0 + 18, y0 + 110), "进入 →", font=_font(12, True),
+               fill=color)
 
     d.rectangle([0, H - 6, W, H], fill=C_ACCENT)
 

@@ -22,3 +22,13 @@ _*.png
 inbox/_*
 build_bak_*/
 fallback_self_review.py
+
+# 本地临时产物（打包日志 / 抓图 / 测试输出），不进公开仓库
+inbox/*.log
+inbox/build_error.txt
+inbox/exe_*.png
+inbox/src_smoke.png
+inbox/shots/
+inbox/shots2/
+logs/
+pic/pic_重命名输出/

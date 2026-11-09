@@ -33,7 +33,7 @@ CN_FONT = "微软雅黑"
 EN_FONT = "Arial"
 
 PRODUCT = "重命名大师"
-VERSION = "V1.11.0"
+VERSION = "V1.10.2"
 DATE_CN = "2026 年 11 月"
 CONTENT_W = Cm(21 - 3 - 3)          # A4 宽 21cm - 左右各 3cm 页边距
 

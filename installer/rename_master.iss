@@ -2,7 +2,7 @@
 ; 编译：iscc installer\rename_master.iss
 
 #define MyAppName "重命名大师"
-#define MyAppVersion "1.11.0"
+#define MyAppVersion "1.10.2"
 #define MyAppPublisher "本地工具"
 #define MyAppExeName "RenameMaster.exe"
 
@@ -23,7 +23,7 @@ PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\assets\rename_master.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
-VersionInfoVersion=1.11.0.0
+VersionInfoVersion=1.10.2.0
 VersionInfoDescription=重命名大师 文件批量命名助手
 VersionInfoProductName=重命名大师
 VersionInfoProductVersion={#MyAppVersion}

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 APP_TITLE = "重命名大师"
 APP_SUBTITLE = "文件批量命名助手"
-VERSION = "1.11.0"
+VERSION = "1.10.2"
 
 # 导航字号（按钮创建 / 激活态统用同一档位，避免切页时字宽跳变）
 _NAV_FONT_SIZE = T.F_BODY
@@ -31,9 +31,6 @@ NAV_ITEMS = [
     ("pdf", "📄", "PDF 命名"),
     ("spreadsheet", "📊", "表格命名"),
     ("document", "📄", "文档命名"),
-    ("store", "🏪", "门店管理"),
-    ("sponsor", "☕", "赞助"),
-    ("help", "❓", "帮助"),
     ("about", "ℹ️", "关于"),
 ]
 
@@ -166,9 +163,6 @@ class App:
             "pdf": self._build_pdf,
             "spreadsheet": self._build_spreadsheet,
             "document": self._build_document,
-            "store": self._build_store,
-            "sponsor": self._build_sponsor,
-            "help": self._build_help,
             "about": self._build_about,
         }
         self.show("home")
@@ -593,27 +587,6 @@ class App:
         f = self._page()
         self.pages["document"] = f
         from rename_master.ui.pages.document import build
-        build(f, self)
-        self._mount_action_bar()
-
-    def _build_store(self) -> None:
-        f = self._page()
-        self.pages["store"] = f
-        from rename_master.ui.pages.store import build
-        build(f, self)
-        self._mount_action_bar()
-
-    def _build_sponsor(self) -> None:
-        f = self._page()
-        self.pages["sponsor"] = f
-        from rename_master.ui.pages.sponsor import build
-        build(f, self)
-        self._mount_action_bar()
-
-    def _build_help(self) -> None:
-        f = self._page()
-        self.pages["help"] = f
-        from rename_master.ui.pages.help import build
         build(f, self)
         self._mount_action_bar()
 
