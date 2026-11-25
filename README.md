@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-1e293b" alt="Windows 10/11">
   <img src="https://img.shields.io/badge/python-3.10%2B-3776ab" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/data-local%20only-16a34a" alt="数据不出本机">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-16a34a.svg" alt="MIT License"></a>
 </p>
 
 **⬇️ 直接下载**：[最新版 Release](https://github.com/Mine1178/renamemaster/releases/latest) · [安装版 `RenameMaster_Setup.exe`](https://github.com/Mine1178/renamemaster/releases/download/v1.10.2/RenameMaster_Setup.exe) · [便携版 ZIP](https://github.com/Mine1178/renamemaster/releases/download/v1.10.2/RenameMaster_v1.10.2_Portable.zip)
